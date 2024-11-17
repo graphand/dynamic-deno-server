@@ -1,13 +1,12 @@
 services:
-  dynamic_deno_server:
-    privileged: true
-    build:
-      context: .
-      dockerfile: dockerfile
-    environment:
-      - ENABLE_LOGS=true
-    volumes:
-      - /opt/functions:/opt/functions
-      - /Users/pierrecabriere/Desktop/logs:/opt/logs
+  dynamic-deno-server:
+    build: .
     ports:
       - "9999:9999"
+    volumes:
+      - /opt/functions:/opt/functions
+      - /opt/logs:/opt/logs
+    environment:
+      - ENABLE_LOGS=true
+    privileged: true
+    restart: unless-stopped

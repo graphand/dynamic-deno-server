@@ -13,6 +13,7 @@ Welcome to **Dynamic Deno Server**! This project allows you to dynamically manag
   - [2. Run the Docker Container 🚀](#2-run-the-docker-container-)
   - [3. Create a Subdirectory Server 📁](#3-create-a-subdirectory-server-)
   - [4. Access the Subdirectory Server 🌐](#4-access-the-subdirectory-server-)
+- [Running with Docker Compose 🐋](#running-with-docker-compose-)
 - [Configuration](#configuration)
 - [Usage 📝](#usage-)
 - [Example 🌟](#example-)
@@ -115,6 +116,52 @@ You should see:
 
 ```
 Hello from Hello World Function!
+```
+
+## Running with Docker Compose 🐋
+
+For easier deployment, you can use Docker Compose. Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  dynamic-deno-server:
+    build: .
+    ports:
+      - "9999:9999"
+    volumes:
+      - /opt/functions:/opt/functions
+      - /opt/logs:/opt/logs
+    environment:
+      - ENABLE_LOGS=true
+    privileged: true
+    restart: unless-stopped
+```
+
+Then run:
+
+```bash
+docker compose up -d
+```
+
+This will:
+
+- Build the Docker image if needed
+- Start the container in detached mode (-d)
+- Mount the necessary volumes
+- Set up the environment variables
+- Enable privileged mode for network namespace support
+- Automatically restart the container unless explicitly stopped
+
+To stop the service:
+
+```bash
+docker compose down
+```
+
+For development, you might want to rebuild the image when making changes:
+
+```bash
+docker compose up -d --build
 ```
 
 ## Configuration
