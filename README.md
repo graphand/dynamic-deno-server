@@ -42,7 +42,7 @@ Welcome to **Dynamic Deno Server**! This project allows you to dynamically manag
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/dynamic-deno-server.git
+git clone https://github.com/graphand/dynamic-deno-server.git
 cd dynamic-deno-server
 ```
 
