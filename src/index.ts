@@ -7,22 +7,25 @@ const serverManager = new ServerManager();
 
 // Function to watch the main directory and manage child servers
 async function watchDirectory() {
-  const watcher = Deno.watchFs(CONFIG.mainDirectory);
+  const watcher = Deno.watchFs(CONFIG.funcDirectory);
 
   // Start watching immediately and scan directory concurrently
   const watchPromise = (async () => {
+    console.log(`Watching directory ${CONFIG.funcDirectory}`);
+
     for await (const event of watcher) {
       if (!["create", "rename", "remove"].includes(event.kind)) continue;
 
       for (const path of event.paths) {
-        if (path === CONFIG.mainDirectory) continue;
-        const normalizedPath = await normalizePath(path);
+        const normalizedPath = await normalizePath(path).catch((e) => {
+          console.error(`Failed to normalize path ${path}:`, e.message);
+          return null;
+        });
+
+        if (!normalizedPath) continue;
 
         // For create/rename events, start server if it's a directory
-        if (
-          ["create", "rename"].includes(event.kind) &&
-          (await Deno.stat(path)).isDirectory
-        ) {
+        if (["create", "rename"].includes(event.kind)) {
           const server = serverManager.getServer(normalizedPath);
           if (!server) {
             serverManager.startServer(path, normalizedPath);
@@ -30,10 +33,9 @@ async function watchDirectory() {
         }
 
         // For remove events, stop server if we have one running
-        if (event.kind === "remove") {
+        if (["remove"].includes(event.kind)) {
           const server = serverManager.getServer(normalizedPath);
           if (server) {
-            console.log(`Detected removal of directory ${path}`);
             await serverManager.stopServer(normalizedPath).catch((error) => {
               console.error(
                 `Failed to stop child server for ${normalizedPath}:`,
@@ -48,11 +50,11 @@ async function watchDirectory() {
 
   // Scan existing directories concurrently with watching
   const entries = new Set<string>();
-  for await (const entry of walk(CONFIG.mainDirectory, {
+  for await (const entry of walk(CONFIG.funcDirectory, {
     maxDepth: 1,
     includeDirs: true,
   })) {
-    if (entry.isDirectory && entry.path !== CONFIG.mainDirectory) {
+    if (entry.isDirectory && entry.path !== CONFIG.funcDirectory) {
       entries.add(entry.path);
     }
   }
@@ -60,7 +62,13 @@ async function watchDirectory() {
   // Start all existing subdirectory servers concurrently
   await Promise.all(
     Array.from(entries).map(async (entry) => {
-      const normalizedPath = await normalizePath(entry);
+      const normalizedPath = await normalizePath(entry).catch((e) => {
+        console.error(e.message);
+        return null;
+      });
+
+      if (!normalizedPath) return;
+
       const server = serverManager.getServer(normalizedPath);
       if (!server) {
         serverManager.startServer(entry, normalizedPath);
@@ -82,7 +90,7 @@ async function startMainServer() {
       const url = new URL(req.url);
       const subdirectory = url.pathname.split("/")[1];
       const normalizedPath = await normalizePath(
-        `${CONFIG.mainDirectory}/${subdirectory}`
+        `${CONFIG.funcDirectory}/${subdirectory}`
       );
       const server = serverManager.getServer(normalizedPath);
 

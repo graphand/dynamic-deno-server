@@ -1,8 +1,8 @@
 import { CONFIG } from "../config.ts";
 
 export function normalizePath(path: string): string | null {
-  if (!path.startsWith(CONFIG.mainDirectory)) {
-    throw new Error(`Path ${path} is not within ${CONFIG.mainDirectory}`);
+  if (!path.startsWith(CONFIG.funcDirectory)) {
+    throw new Error(`Path ${path} is not within ${CONFIG.funcDirectory}`);
   }
 
   // Remove leading and trailing slashes

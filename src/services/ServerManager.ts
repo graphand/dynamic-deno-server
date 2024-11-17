@@ -30,6 +30,8 @@ export class ServerManager {
 
     this.servers.set(normalizedPath, server);
 
+    console.log(`Starting server "${normalizedPath}"`);
+
     pollDirectory(path).catch(() => {
       this.stopServer(normalizedPath);
     });

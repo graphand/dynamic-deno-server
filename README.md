@@ -133,6 +133,8 @@ services:
       - /opt/logs:/opt/logs
     environment:
       - ENABLE_LOGS=true
+      - DISABLE_HEALTH_CHECKS=false
+      - SERVICE_PORT=9999
     privileged: true
     restart: unless-stopped
 ```

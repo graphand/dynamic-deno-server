@@ -1,3 +1,4 @@
+import { resolve } from "https://deno.land/std@0.200.0/path/resolve.ts";
 import { CONFIG } from "../config.ts";
 
 export async function runCommand(cmd: string[]): Promise<string> {
@@ -43,16 +44,39 @@ export async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
+export async function isFile(path: string): Promise<boolean> {
+  try {
+    const stat = await Deno.stat(path);
+    return stat.isFile;
+  } catch {
+    return false;
+  }
+}
+
 export async function normalizePath(path: string): Promise<string> {
   try {
     const realPath = await Deno.realPath(path);
-    const realMainDir = await Deno.realPath(CONFIG.mainDirectory);
 
-    if (realPath.startsWith(realMainDir)) {
-      return btoa(realPath).replace(/=/g, "");
+    if (!(await isDirectory(realPath))) {
+      throw new Error(`Path ${path} is not a directory`);
     }
 
-    throw new Error(`Path ${path} is not within ${CONFIG.mainDirectory}`);
+    if (!realPath.startsWith(CONFIG.funcDirectory)) {
+      throw new Error(`Path ${path} is not within ${CONFIG.funcDirectory}`);
+    }
+
+    const serverName = realPath.slice(CONFIG.funcDirectory.length + 1);
+
+    if (!serverName || serverName.includes("/")) {
+      throw new Error(`Path ${path} is not a valid server name`);
+    }
+
+    const index = resolve(realPath, "index.ts");
+    if (!(await isFile(index))) {
+      throw new Error(`Path ${path} does not contain an index.ts file`);
+    }
+
+    return serverName;
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) {
       return path;
