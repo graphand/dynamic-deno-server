@@ -1,3 +1,5 @@
+import { resolve } from "https://deno.land/std/path/mod.ts";
+
 import { SubdirectoryServer } from "../types.ts";
 import { NamespaceService } from "./NamespaceService.ts";
 import {
@@ -68,6 +70,39 @@ export class ServerManager {
       ]);
 
       server.process = child;
+
+      if (CONFIG.enableLogs) {
+        const name = path.split("/").pop();
+        if (name && child.stdout && child.stderr) {
+          const logsDirectory = resolve(CONFIG.logsDirectory, name);
+
+          // Create the directory if it doesn't exist
+          await Deno.mkdir(logsDirectory, { recursive: true });
+
+          const outLogPath = resolve(logsDirectory, "stdout");
+          const errLogPath = resolve(logsDirectory, "stderr");
+
+          // Create the files if they don't exist
+          await Deno.writeTextFile(outLogPath, "");
+          await Deno.writeTextFile(errLogPath, "");
+
+          // Create write streams for stdout and stderr
+          const stdoutStream = await Deno.open(outLogPath, {
+            write: true,
+            create: true,
+            append: true,
+          });
+          const stderrStream = await Deno.open(errLogPath, {
+            write: true,
+            create: true,
+            append: true,
+          });
+
+          // Pipe process output to log files
+          child.stdout.pipeTo(stdoutStream.writable);
+          child.stderr.pipeTo(stderrStream.writable);
+        }
+      }
 
       if (!CONFIG.disableHealthChecks) {
         const isHealthy = await checkServerHealth(

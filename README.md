@@ -9,18 +9,25 @@ Welcome to **Dynamic Deno Server**! This project allows you to dynamically manag
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Running with Docker](#running-with-docker)
-- [Usage](#usage)
-- [Example](#example)
-- [How to Stop the Server](#how-to-stop-the-server)
-- [Contributing](#contributing)
-- [License](#license)
+  - [1. Build the Docker Image 🔨](#1-build-the-docker-image-)
+  - [2. Run the Docker Container 🚀](#2-run-the-docker-container-)
+  - [3. Create a Subdirectory Server 📁](#3-create-a-subdirectory-server-)
+  - [4. Access the Subdirectory Server 🌐](#4-access-the-subdirectory-server-)
+- [Configuration](#configuration)
+- [Usage 📝](#usage-)
+- [Example 🌟](#example-)
+- [Logs 📑](#logs-)
+- [How to Stop the Server 🛑](#how-to-stop-the-server-)
+- [Contributing 🤝](#contributing-)
+- [License 📄](#license-)
 
 ## Features ✨
 
 - **Dynamic Subdirectory Watching**: Automatically detects new subdirectories and serves them.
 - **Isolation with Network Namespaces**: Each subdirectory server runs in its own Linux network namespace for security and isolation.
-- **Proxy Requests**: Proxies incoming requests to the appropriate subdirectory server.
+- **Proxy Requests**: Proxies incoming requests to the appropriate subdirectory server based on the URL path.
 - **Automatic Cleanup**: Stops servers and cleans up resources when subdirectories are deleted.
+- **Logging Support**: Optionally log the stdout and stderr of each subdirectory server to files for easy debugging and monitoring.
 
 ## How It Works 🛠️
 
@@ -29,7 +36,8 @@ Welcome to **Dynamic Deno Server**! This project allows you to dynamically manag
 3. **Namespace Creation**: It creates a dedicated Linux network namespace for the subdirectory server.
 4. **Server Startup**: Runs the subdirectory's `index.ts` file using Deno within the namespace.
 5. **Request Proxying**: Incoming requests to the main server are proxied to the appropriate subdirectory server based on the URL path.
-6. **Cleanup**: If a subdirectory is removed, its server is stopped, and resources are cleaned up.
+6. **Logging (Optional)**: If enabled, the stdout and stderr of subdirectory servers are logged to files in `/opt/logs/{serverName}/`.
+7. **Cleanup**: If a subdirectory is removed, its server is stopped, and resources are cleaned up.
 
 ## Prerequisites 📋
 
@@ -63,6 +71,8 @@ docker run -d \
   --name dynamic-deno-server \
   -p 9999:9999 \
   -v /opt/functions:/opt/functions \
+  -v /opt/logs:/opt/logs \
+  -e ENABLE_LOGS=true \
   --privileged \
   dynamic-deno-server
 ```
@@ -72,6 +82,8 @@ docker run -d \
   - `--name`: Name the container.
   - `-p 9999:9999`: Map port `9999` of the container to port `9999` on your host.
   - `-v /opt/functions:/opt/functions`: Mount the host directory `/opt/functions` into the container at `/opt/functions` (this is the watched directory).
+  - `-v /opt/logs:/opt/logs`: Mount the host directory `/opt/logs` into the container at `/opt/logs` to access logs.
+  - `-e ENABLE_LOGS=true`: Set the environment variable `ENABLE_LOGS` to `true` to enable logging.
   - `--privileged`: Allow the container to use advanced Linux features like network namespaces.
 
 ### 3. Create a Subdirectory Server 📁
@@ -104,6 +116,14 @@ You should see:
 ```
 Hello from Hello World Function!
 ```
+
+## Configuration
+
+The Dynamic Deno Server can be configured using environment variables:
+
+- `SERVICE_PORT`: Port on which the main server runs (default: `9999`).
+- `DISABLE_HEALTH_CHECKS`: If set to `true`, disables health checks for subdirectory servers (default: `false`).
+- `ENABLE_LOGS`: If set to `true`, enables logging of stdout and stderr for subdirectory servers (default: `false`).
 
 ## Usage 📝
 
@@ -140,6 +160,34 @@ You should see:
 Goodbye from Goodbye World Function!
 ```
 
+## Logs 📑
+
+If logging is enabled by setting the `ENABLE_LOGS` environment variable to `true`, the stdout and stderr of each subdirectory server are written to files in the `/opt/logs/{serverName}/` directory inside the container.
+
+- **Accessing Logs**: By binding the `/opt/logs` directory to a local directory on your host machine, you can access the logs locally.
+
+  For example, when running the Docker container, add the volume binding:
+
+  ```bash
+  -v /path/to/local/logs:/opt/logs
+  ```
+
+  Replace `/path/to/local/logs` with the path where you want to store the logs on your host machine.
+
+- **Log Files**:
+
+  - **Standard Output**: `/opt/logs/{serverName}/stdout`
+  - **Standard Error**: `/opt/logs/{serverName}/stderr`
+
+- **Example**:
+
+  Assuming you have a subdirectory server named `hello-world`, the logs will be located at:
+
+  - Standard Output: `/path/to/local/logs/hello-world/stdout`
+  - Standard Error: `/path/to/local/logs/hello-world/stderr`
+
+- **Note**: The logs directory and files are created automatically when logging is enabled and a subdirectory server is started.
+
 ## How to Stop the Server 🛑
 
 To stop and remove the Docker container:
@@ -161,7 +209,9 @@ This project is licensed under the MIT License.
 
 Made with ❤️ using Deno and Docker.
 
-# Dockerfile
+---
+
+## Dockerfile
 
 Here's the `Dockerfile` used to build the Docker image:
 
@@ -185,7 +235,7 @@ EXPOSE 9999
 CMD ["deno", "run", "--allow-all", "--quiet", "./index.ts"]
 ```
 
-# Project Structure 📁
+## Project Structure 📁
 
 ```
 dynamic-deno-server/
@@ -208,7 +258,7 @@ dynamic-deno-server/
 ## Brief Code Overview 🧐
 
 - **index.ts**: The entry point. Starts the main server, watches the main directory, and manages subdirectory servers.
-- **config.ts**: Contains configuration like ports and main directory path.
+- **config.ts**: Contains configuration like ports, main directory path, and logging settings.
 - **types.ts**: Defines TypeScript interfaces for the project.
 - **ServerManager.ts**: Manages starting and stopping of subdirectory servers.
 - **NamespaceService.ts**: Handles creation and cleanup of network namespaces.
@@ -219,15 +269,21 @@ dynamic-deno-server/
 - **Isolation**: Each subdirectory server runs in its own network namespace, providing isolation.
 - **Permissions**: The Docker container runs with `--privileged` to allow network namespace operations. Ensure you trust the code being run.
 - **Code Validation**: Subdirectory code is validated before execution using `deno check`.
+- **Logging Permissions**: Ensure that the `/opt/logs` directory is properly secured, especially if it contains sensitive information.
 
 ## Troubleshooting 🛠️
 
 - **Ports in Use**: Ensure that the port `9999` is not in use on your host machine.
 - **Permissions**: Docker needs to run with `--privileged` to manage network namespaces.
-- **Directory Mounting**: The `/opt/functions` directory must be accessible and mounted correctly in the Docker container.
+- **Directory Mounting**: The `/opt/functions` and `/opt/logs` directories must be accessible and mounted correctly in the Docker container.
+- **Logging Not Working**: If logs are not being generated, ensure that `ENABLE_LOGS` is set to `true` and that the `/opt/logs` directory has the correct permissions.
 
 Feel free to open an issue if you encounter any problems!
 
 ---
 
 Happy Coding! 🎉
+
+---
+
+**Note**: Remember to replace `/path/to/local/logs` with the actual path where you want to store the logs on your host machine when running the Docker container.

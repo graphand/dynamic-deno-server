@@ -4,8 +4,10 @@ services:
     build:
       context: .
       dockerfile: dockerfile
+    environment:
+      - ENABLE_LOGS=true
     volumes:
       - /opt/functions:/opt/functions
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /Users/pierrecabriere/Desktop/logs:/opt/logs
     ports:
       - "9999:9999"
