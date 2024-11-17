@@ -69,12 +69,15 @@ export class ServerManager {
 
       server.process = child;
 
-      const isHealthy = await checkServerHealth(
-        childIP,
-        CONFIG.subdirectoryInternalPort
-      );
-      if (!isHealthy) {
-        throw new Error("Child server health check failed");
+      if (!CONFIG.disableHealthChecks) {
+        const isHealthy = await checkServerHealth(
+          childIP,
+          CONFIG.subdirectoryInternalPort
+        );
+
+        if (!isHealthy) {
+          throw new Error("Child server health check failed");
+        }
       }
 
       server.status = "ready";
