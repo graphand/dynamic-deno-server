@@ -1,0 +1,11 @@
+services:
+  dynamic_deno_server:
+    privileged: true
+    build:
+      context: .
+      dockerfile: dockerfile
+    volumes:
+      - /opt/functions:/opt/functions
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "9999:9999"
