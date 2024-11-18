@@ -14,24 +14,15 @@ export async function runCommand(cmd: string[]): Promise<string> {
     const output = new TextDecoder().decode(stdout);
     const errorOutput = new TextDecoder().decode(stderr);
     if (!success) {
-      return Promise.reject(
-        new Error(`Command failed: ${cmd.join(" ")}\n${errorOutput}`)
-      );
+      return Promise.reject(new Error(`Command failed: ${cmd.join(" ")}\n${errorOutput}`));
     }
     return output;
   } catch (error) {
-    return Promise.reject(
-      new Error(
-        `Failed to run command: ${cmd.join(" ")}\n${(error as Error).message}`
-      )
-    );
+    return Promise.reject(new Error(`Failed to run command: ${cmd.join(" ")}\n${(error as Error).message}`));
   }
 }
 
-export async function runCommandNS(
-  namespace: string,
-  cmd: string[]
-): Promise<string> {
+export async function runCommandNS(namespace: string, cmd: string[]): Promise<string> {
   return await runCommand(["ip", "netns", "exec", namespace, ...cmd]);
 }
 

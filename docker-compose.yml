@@ -10,5 +10,6 @@ services:
       - ENABLE_LOGS=true
       - DISABLE_HEALTH_CHECKS=false
       - SERVICE_PORT=9999
+      - SERVER_ENVIRONMENT='{"KEY1":"value1","KEY2":"value2"}'
     privileged: true
     restart: unless-stopped

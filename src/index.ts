@@ -17,7 +17,7 @@ async function watchDirectory() {
       if (!["create", "rename", "remove"].includes(event.kind)) continue;
 
       for (const path of event.paths) {
-        const normalizedPath = await normalizePath(path).catch((e) => {
+        const normalizedPath = await normalizePath(path).catch(e => {
           console.error(`Failed to normalize path ${path}:`, e.message);
           return null;
         });
@@ -36,11 +36,8 @@ async function watchDirectory() {
         if (["remove"].includes(event.kind)) {
           const server = serverManager.getServer(normalizedPath);
           if (server) {
-            await serverManager.stopServer(normalizedPath).catch((error) => {
-              console.error(
-                `Failed to stop child server for ${normalizedPath}:`,
-                error
-              );
+            await serverManager.stopServer(normalizedPath).catch(error => {
+              console.error(`Failed to stop child server for ${normalizedPath}:`, error);
             });
           }
         }
@@ -61,8 +58,8 @@ async function watchDirectory() {
 
   // Start all existing subdirectory servers concurrently
   await Promise.all(
-    Array.from(entries).map(async (entry) => {
-      const normalizedPath = await normalizePath(entry).catch((e) => {
+    Array.from(entries).map(async entry => {
+      const normalizedPath = await normalizePath(entry).catch(e => {
         console.error(e.message);
         return null;
       });
@@ -73,7 +70,7 @@ async function watchDirectory() {
       if (!server) {
         serverManager.startServer(entry, normalizedPath);
       }
-    })
+    }),
   );
 
   // Keep the watcher running
@@ -84,66 +81,55 @@ async function watchDirectory() {
 async function startMainServer() {
   console.log(`Main server running on port ${CONFIG.mainPort}`);
 
-  await Deno.serve(
-    { port: CONFIG.mainPort, onListen: () => null },
-    async (req) => {
-      const url = new URL(req.url);
-      const subdirectory = url.pathname.split("/")[1];
-      const normalizedPath = await normalizePath(
-        `${CONFIG.funcDirectory}/${subdirectory}`
-      );
-      const server = serverManager.getServer(normalizedPath);
+  await Deno.serve({ port: CONFIG.mainPort, onListen: () => null }, async req => {
+    const url = new URL(req.url);
+    const subdirectory = url.pathname.split("/")[1];
+    const normalizedPath = await normalizePath(`${CONFIG.funcDirectory}/${subdirectory}`);
+    const server = serverManager.getServer(normalizedPath);
 
-      if (!server) {
-        return new Response("Function not found", { status: 404 });
-      }
-
-      await server.readyPromise;
-
-      if (server.status === "failed") {
-        const message = server.error || "Server is in failed state";
-        return new Response(message, { status: 500 });
-      }
-
-      const isHealthCheck =
-        req.headers.get("x-graphand-healthcheck") === "true";
-      if (isHealthCheck) {
-        return new Response("OK", { status: 200 });
-      }
-
-      const targetUrl = new URL(
-        url.pathname.replace(`/${subdirectory}`, ""),
-        `http://${server.ipAddress}:${CONFIG.subdirectoryInternalPort}`
-      );
-      targetUrl.search = url.search;
-
-      try {
-        const response = await fetch(targetUrl.toString(), {
-          method: req.method,
-          headers: req.headers,
-          body: req.body,
-        });
-
-        return new Response(response.body, {
-          status: response.status,
-          headers: response.headers,
-        });
-      } catch (error) {
-        return new Response(
-          `Error forwarding request: ${(error as Error).message}`,
-          { status: 502 }
-        );
-      }
+    if (!server) {
+      return new Response("Function not found", { status: 404 });
     }
-  );
+
+    await server.readyPromise;
+
+    if (server.status === "failed") {
+      const message = server.error || "Server is in failed state";
+      return new Response(message, { status: 500 });
+    }
+
+    const isHealthCheck = req.headers.get("x-graphand-healthcheck") === "true";
+    if (isHealthCheck) {
+      return new Response("OK", { status: 200 });
+    }
+
+    const targetUrl = new URL(
+      url.pathname.replace(`/${subdirectory}`, ""),
+      `http://${server.ipAddress}:${CONFIG.serverPort}`,
+    );
+    targetUrl.search = url.search;
+
+    try {
+      const response = await fetch(targetUrl.toString(), {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+      });
+
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    } catch (error) {
+      return new Response(`Error forwarding request: ${(error as Error).message}`, { status: 502 });
+    }
+  });
 }
 
 // Function to cleanup all child servers
 async function cleanupServers() {
   const servers = serverManager.getAllServers();
-  const promises = Array.from(servers.keys()).map((normalizedPath) =>
-    serverManager.stopServer(normalizedPath)
-  );
+  const promises = Array.from(servers.keys()).map(normalizedPath => serverManager.stopServer(normalizedPath));
   await Promise.all(promises);
   Deno.exit(0);
 }

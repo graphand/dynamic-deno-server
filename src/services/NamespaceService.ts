@@ -85,12 +85,31 @@ export class NamespaceService {
     ]).catch(() => null);
   }
 
-  executeCommand(cmd: string[]): Deno.ChildProcess {
+  executeCommand(
+    cmd: string[],
+    opts: {
+      stdin?: Deno.CommandOptions["stdin"];
+      stdout?: Deno.CommandOptions["stdout"];
+      stderr?: Deno.CommandOptions["stderr"];
+      clearEnv?: boolean;
+      env?: Record<string, string>;
+    } = {},
+  ): Deno.ChildProcess {
+    const env: Record<string, string> = Object.assign({}, opts.env, Deno.env.toObject());
+
+    const clearVars = ["SERVER_ENVIRONMENT", "SERVICE_PORT", "DISABLE_HEALTH_CHECKS", "ENABLE_LOGS"];
+
+    clearVars.forEach(key => {
+      delete env[key];
+    });
+
     const command = new Deno.Command("ip", {
       args: ["netns", "exec", this.namespace, ...cmd],
-      stdin: "piped",
-      stdout: "piped",
-      stderr: "piped",
+      stdin: opts.stdin ?? "piped",
+      stdout: opts.stdout ?? "piped",
+      stderr: opts.stderr ?? "piped",
+      clearEnv: opts.clearEnv ?? false,
+      env,
     });
 
     return command.spawn();

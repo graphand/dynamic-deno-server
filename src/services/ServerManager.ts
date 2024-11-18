@@ -1,17 +1,9 @@
 import { resolve } from "https://deno.land/std/path/mod.ts";
-
 import { SubdirectoryServer } from "../types.ts";
 import { NamespaceService } from "./NamespaceService.ts";
-import {
-  generateNamespaceName,
-  generateIndexFromPath,
-} from "../utils/network.ts";
+import { generateNamespaceName, generateIndexFromPath } from "../utils/network.ts";
 import { CONFIG } from "../config.ts";
-import {
-  validateCode,
-  checkServerHealth,
-  pollDirectory,
-} from "../utils/server.ts";
+import { validateCode, checkServerHealth, pollDirectory } from "../utils/server.ts";
 
 export class ServerManager {
   private servers = new Map<string, SubdirectoryServer>();
@@ -36,40 +28,33 @@ export class ServerManager {
       this.stopServer(normalizedPath);
     });
 
-    server.readyPromise = this.initializeServer(
-      path,
-      server,
-      namespaceService,
-      index
-    );
+    server.readyPromise = this.initializeServer(path, server, namespaceService, index);
   }
 
   private async initializeServer(
     path: string,
     server: SubdirectoryServer,
     namespaceService: NamespaceService,
-    index: number
+    index: number,
   ): Promise<void> {
     try {
       await validateCode(path);
 
       if (await namespaceService.exists()) {
-        console.log(
-          `Namespace ${server.namespace} already exists for path ${path}`
-        );
+        console.log(`Namespace ${server.namespace} already exists for path ${path}`);
         return;
       }
 
       const { childIP } = await namespaceService.create(index);
       server.ipAddress = childIP;
 
-      const child = await namespaceService.executeCommand([
-        "deno",
-        "run",
-        "--allow-all",
-        "--quiet",
-        `${path}/index.ts`,
-      ]);
+      const child = await namespaceService.executeCommand(
+        ["deno", "run", "--allow-all", "--quiet", `${path}/index.ts`],
+        {
+          env: CONFIG.serverEnvironment,
+          clearEnv: true,
+        },
+      );
 
       server.process = child;
 
@@ -107,10 +92,7 @@ export class ServerManager {
       }
 
       if (!CONFIG.disableHealthChecks) {
-        const isHealthy = await checkServerHealth(
-          childIP,
-          CONFIG.subdirectoryInternalPort
-        );
+        const isHealthy = await checkServerHealth(childIP, CONFIG.serverPort);
 
         if (!isHealthy) {
           throw new Error("Child server health check failed");

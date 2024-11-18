@@ -1,7 +1,7 @@
 {
   "name": "dynamic-deno-server",
   "version": "1.0.0",
-  "description": "Welcome to **Dynamic Deno Server**! This project allows you to dynamically manage multiple Deno servers with isolation using Linux network namespaces. It watches a main directory for subdirectories containing Deno applications and automatically serves them as separate instances. Think of it as a magical proxy that spins up servers on the fly! 🪄",
+  "description": "A dynamic Deno proxy server that auto-deploys subdirectories as isolated Deno servers using Linux network namespaces for secure multi-tenant hosting",
   "main": "src/index.ts",
   "scripts": {
     "test": "deno test --allow-all"
@@ -15,5 +15,9 @@
   "bugs": {
     "url": "https://github.com/graphand/dynamic-deno-server/issues"
   },
-  "homepage": "https://github.com/graphand/dynamic-deno-server#readme"
+  "homepage": "https://github.com/graphand/dynamic-deno-server#readme",
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
+    "prettier": "^3.3.3"
+  }
 }

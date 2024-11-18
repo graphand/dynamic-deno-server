@@ -15,6 +15,7 @@ Welcome to **Dynamic Deno Server**! This project allows you to dynamically manag
   - [4. Access the Subdirectory Server 🌐](#4-access-the-subdirectory-server-)
 - [Running with Docker Compose 🐋](#running-with-docker-compose-)
 - [Configuration](#configuration)
+- [Environment Variables for Subdirectory Servers 🌍](#environment-variables-for-subdirectory-servers-)
 - [Usage 📝](#usage-)
 - [Example 🌟](#example-)
 - [Logs 📑](#logs-)
@@ -74,6 +75,7 @@ docker run -d \
   -v /opt/functions:/opt/functions \
   -v /opt/logs:/opt/logs \
   -e ENABLE_LOGS=true \
+  -e SERVER_ENVIRONMENT='{"KEY1":"value1","KEY2":"value2"}' \
   --privileged \
   dynamic-deno-server
 ```
@@ -85,6 +87,7 @@ docker run -d \
   - `-v /opt/functions:/opt/functions`: Mount the host directory `/opt/functions` into the container at `/opt/functions` (this is the watched directory).
   - `-v /opt/logs:/opt/logs`: Mount the host directory `/opt/logs` into the container at `/opt/logs` to access logs.
   - `-e ENABLE_LOGS=true`: Set the environment variable `ENABLE_LOGS` to `true` to enable logging.
+  - `-e SERVER_ENVIRONMENT='{"KEY1":"value1","KEY2":"value2"}'`: Set the environment variable `SERVER_ENVIRONMENT` to a stringified JSON object containing key-value pairs of environment variables you wish to make available to your subdirectory servers.
   - `--privileged`: Allow the container to use advanced Linux features like network namespaces.
 
 ### 3. Create a Subdirectory Server 📁
@@ -135,6 +138,7 @@ services:
       - ENABLE_LOGS=true
       - DISABLE_HEALTH_CHECKS=false
       - SERVICE_PORT=9999
+      - SERVER_ENVIRONMENT='{"KEY1":"value1","KEY2":"value2"}'
     privileged: true
     restart: unless-stopped
 ```
@@ -173,6 +177,57 @@ The Dynamic Deno Server can be configured using environment variables:
 - `SERVICE_PORT`: Port on which the main server runs (default: `9999`).
 - `DISABLE_HEALTH_CHECKS`: If set to `true`, disables health checks for subdirectory servers (default: `false`).
 - `ENABLE_LOGS`: If set to `true`, enables logging of stdout and stderr for subdirectory servers (default: `false`).
+- `SERVER_ENVIRONMENT`: A stringified JSON object containing key-value pairs of environment variables you wish to make available to your subdirectory servers.
+
+## Environment Variables for Subdirectory Servers 🌍
+
+The Dynamic Deno Server allows you to pass environment variables to all subdirectory servers using the `SERVER_ENVIRONMENT` environment variable. This is particularly useful when you need to provide configuration, API keys, or other environment-specific values to your functions.
+
+### Usage
+
+Set the `SERVER_ENVIRONMENT` variable as a stringified JSON object when running the container:
+
+```bash
+docker run -d \
+  --name dynamic-deno-server \
+  -p 9999:9999 \
+  -v /opt/functions:/opt/functions \
+  -e SERVER_ENVIRONMENT='{"API_KEY":"your-api-key","DATABASE_URL":"postgresql://user:pass@host/db"}' \
+  --privileged \
+  dynamic-deno-server
+```
+
+Or in your docker-compose.yml:
+
+```yaml
+services:
+  dynamic-deno-server:
+    build: .
+    environment:
+      - SERVER_ENVIRONMENT='{"API_KEY":"your-api-key","DATABASE_URL":"postgresql://user:pass@host/db"}'
+    # ... other configuration
+```
+
+### Accessing Environment Variables
+
+In your subdirectory server's `index.ts`, you can access these environment variables using `Deno.env`:
+
+```typescript
+// /opt/functions/my-server/index.ts
+import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
+
+const apiKey = Deno.env.get("API_KEY");
+const dbUrl = Deno.env.get("DATABASE_URL");
+
+serve((req) => new Response(`API Key: ${apiKey}, DB URL: ${dbUrl}`));
+```
+
+### Important Notes
+
+- The `SERVER_ENVIRONMENT` value must be a valid JSON string
+- Environment variables are isolated to each subdirectory server
+- System environment variables (`SERVICE_PORT`, `DISABLE_HEALTH_CHECKS`, `ENABLE_LOGS`, `SERVER_ENVIRONMENT`) are not passed to subdirectory servers for security reasons
+- If the JSON string is invalid, an error will be logged, and no custom environment variables will be set
 
 ## Usage 📝
 
