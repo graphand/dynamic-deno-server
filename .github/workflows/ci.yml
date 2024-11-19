@@ -19,7 +19,7 @@ jobs:
           deno-version: v2.x
 
       - name: Setup environment
-        run: mkdir -p /opt/functions
+        run: mkdir -p /opt/functions && mkdir -p /opt/logs
 
       - name: Run tests
         run: deno test --allow-all
