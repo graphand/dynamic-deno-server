@@ -35,12 +35,12 @@ export async function checkServerHealth(ipAddress: string, port: number): Promis
   return false;
 }
 
-export async function pollDirectory(path: string) {
+export async function pollDirectory(path: string, interval: number = 3000) {
   while (true) {
     const exists = await isDirectory(path);
     if (!exists) {
       throw new Error();
     }
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, interval));
   }
 }

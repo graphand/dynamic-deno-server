@@ -45,33 +45,27 @@ export async function isFile(path: string): Promise<boolean> {
 }
 
 export async function normalizePath(path: string): Promise<string> {
-  try {
-    const realPath = await Deno.realPath(path);
+  const realPath = await Deno.realPath(path);
+  const functionsDir = await Deno.realPath(CONFIG.funcDirectory);
 
-    if (!(await isDirectory(realPath))) {
-      throw new Error(`Path ${path} is not a directory`);
-    }
-
-    if (!realPath.startsWith(CONFIG.funcDirectory)) {
-      throw new Error(`Path ${path} is not within ${CONFIG.funcDirectory}`);
-    }
-
-    const serverName = realPath.slice(CONFIG.funcDirectory.length + 1);
-
-    if (!serverName || serverName.includes("/")) {
-      throw new Error(`Path ${path} is not a valid server name`);
-    }
-
-    const index = resolve(realPath, "index.ts");
-    if (!(await isFile(index))) {
-      throw new Error(`Path ${path} does not contain an index.ts file`);
-    }
-
-    return serverName;
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      return path;
-    }
-    throw error;
+  if (!(await isDirectory(realPath))) {
+    throw new Error(`Path ${path} is not a directory`);
   }
+
+  if (!realPath.startsWith(functionsDir)) {
+    throw new Error(`Path ${realPath} is not within ${functionsDir}`);
+  }
+
+  const serverName = realPath.slice(functionsDir.length + 1);
+
+  if (!serverName || serverName.includes("/")) {
+    throw new Error(`Path ${path} is not a valid server name`);
+  }
+
+  const index = resolve(realPath, "index.ts");
+  if (!(await isFile(index))) {
+    throw new Error(`Path ${path} does not contain an index.ts file`);
+  }
+
+  return serverName;
 }
