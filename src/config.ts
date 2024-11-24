@@ -10,7 +10,7 @@ if (Deno.env.get("SERVER_ENVIRONMENT")) {
 
 export const CONFIG = {
   mainPort: parseInt(Deno.env.get("SERVICE_PORT") || "9999"),
-  disableHealthChecks: Deno.env.get("DISABLE_HEALTH_CHECKS") === "true",
+  healthCheckAttempts: parseInt(Deno.env.get("HEALTH_CHECK_ATTEMPTS") || "5"),
   enableLogs: Deno.env.get("ENABLE_LOGS") === "true",
   serverPort: parseInt(Deno.env.get("SERVER_PORT") || "8000"),
   funcDirectory: await Deno.realPath("/opt/functions"),

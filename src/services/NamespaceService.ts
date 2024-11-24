@@ -1,8 +1,13 @@
-import { runCommand, runCommandNS } from "../utils/system.ts";
-import { generateIPAddresses } from "../utils/network.ts";
+import { runCommand } from "../utils/system.ts";
+import { resolve } from "https://deno.land/std@0.200.0/path/mod.ts";
 
 export class NamespaceService {
   constructor(private readonly namespace: string) {}
+
+  // Helper function to generate namespace names
+  static generateNamespaceName(path: string): string {
+    return "ns_" + btoa(path).replace(/=/g, "");
+  }
 
   async exists(): Promise<boolean> {
     try {
@@ -14,75 +19,109 @@ export class NamespaceService {
     }
   }
 
-  async create(index: number): Promise<{ mainIP: string; childIP: string }> {
-    const { mainIP, childIP } = generateIPAddresses(index);
-    const vethMain = `veth-main${index}`;
-    const vethChild = `veth-child${index}`;
-
-    // Create network namespace
-    await runCommand(["ip", "netns", "add", this.namespace]);
-
-    await Promise.all([
-      runCommand(["ip", "link", "add", vethMain, "type", "veth", "peer", "name", vethChild]),
-      runCommand(["ip", "link", "set", vethChild, "netns", this.namespace]),
-      runCommand(["mkdir", "-p", `/etc/netns/${this.namespace}`]),
-    ]);
-
-    await Promise.all([
-      // Configure main namespace
-      runCommand(["ip", "addr", "add", `${mainIP}/24`, "dev", vethMain]),
-      runCommand(["ip", "link", "set", vethMain, "up"]),
-
-      // Configure child namespace
-      runCommandNS(this.namespace, ["ip", "addr", "add", `${childIP}/24`, "dev", vethChild]),
-      runCommandNS(this.namespace, ["ip", "link", "set", vethChild, "up"]),
-      runCommandNS(this.namespace, ["ip", "link", "set", "lo", "up"]),
-      runCommandNS(this.namespace, ["ip", "route", "add", "default", "via", mainIP]),
-
-      // Create DNS configuration
-      Deno.writeTextFile(
-        `/etc/netns/${this.namespace}/resolv.conf`,
-        "nameserver 1.1.1.1\n" + "nameserver 8.8.8.8",
-      ),
-    ]);
-
-    // Add NAT rules
-    await runCommand([
-      "iptables",
-      "-t",
-      "nat",
-      "-A",
-      "POSTROUTING",
-      "-s",
-      `${childIP}/24`,
-      "-j",
-      "MASQUERADE",
-    ]);
-
-    return { mainIP, childIP };
+  async create(): Promise<void> {
+    const scriptPath = resolve(Deno.cwd(), "./src/scripts/create-namespace.sh");
+    await runCommand(["sh", scriptPath, this.namespace]);
   }
 
-  async cleanup(ipAddress: string): Promise<void> {
-    // Clean up DNS configuration
-    await runCommand(["rm", "-rf", `/etc/netns/${this.namespace}`]).catch(console.error);
+  async connect(port: number): Promise<boolean> {
+    const process = await this.executeCommand(["nc", "-z", "-w1", "127.0.0.1", port.toString()]);
+    const { success } = await process.status;
 
-    // Delete namespace if it exists
-    if (await this.exists()) {
-      await runCommand(["ip", "netns", "del", this.namespace]);
+    if (!success) {
+      throw new Error();
     }
 
-    // Remove NAT rules
-    await runCommand([
-      "iptables",
-      "-t",
-      "nat",
-      "-D",
-      "POSTROUTING",
-      "-s",
-      `${ipAddress}/24`,
-      "-j",
-      "MASQUERADE",
-    ]).catch(() => null);
+    return success;
+  }
+
+  async fetch(url: string, request: Request): Promise<Response> {
+    // Build curl command array
+    // -s: silent mode, -D /dev/stderr: write headers to stderr, -o -: write body to stdout
+    const curlCmd = ["curl", "-s", "-D", "/dev/stderr", "-o", "-"];
+
+    // Set request method
+    if (request.method !== "GET") {
+      curlCmd.push("-X", request.method);
+    }
+
+    // Add headers from the request
+    for (const [key, value] of request.headers.entries()) {
+      curlCmd.push("-H", `${key}: ${value}`);
+    }
+
+    // Handle request body if present
+    if (request.body) {
+      curlCmd.push("--data-binary", "@-"); // Read from stdin
+    }
+
+    // Add the URL as the final argument
+    curlCmd.push(url);
+
+    // Execute curl in the namespace
+    const process = this.executeCommand(curlCmd, {
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
+    });
+
+    // If there's a body, pipe it to curl's stdin
+    if (request.body) {
+      const writer = process.stdin.getWriter();
+      await request.body.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            return writer.write(chunk);
+          },
+          close() {
+            return writer.close();
+          },
+        }),
+      );
+    }
+
+    // Wait for the process to complete and get output
+    const { stdout, stderr, success } = await process.output();
+
+    // Handle error cases
+    if (!success) {
+      const errorText = new TextDecoder().decode(stderr);
+      return new Response(errorText, {
+        status: 500,
+        statusText: "Error executing request in namespace",
+      });
+    }
+
+    // Parse curl headers from stderr
+    const stderrText = new TextDecoder().decode(stderr);
+    const headers = new Headers();
+    let status = 200;
+
+    // Parse the headers from curl's output
+    const headerLines = stderrText.split("\n");
+    for (const line of headerLines) {
+      if (line.startsWith("HTTP/")) {
+        // Parse status code from HTTP response line
+        status = parseInt(line.split(" ")[1], 10);
+      } else if (line.includes(":")) {
+        // Parse response headers
+        const [key, ...values] = line.split(":");
+        if (key && values.length) {
+          headers.set(key.trim(), values.join(":").trim());
+        }
+      }
+    }
+
+    // Return response with parsed headers and status
+    return new Response(stdout, {
+      status,
+      headers,
+    });
+  }
+
+  async cleanup(): Promise<void> {
+    const scriptPath = resolve(Deno.cwd(), "./src/scripts/cleanup-namespace.sh");
+    await runCommand(["sh", scriptPath, this.namespace]);
   }
 
   executeCommand(
@@ -97,7 +136,7 @@ export class NamespaceService {
   ): Deno.ChildProcess {
     const env: Record<string, string> = Object.assign({}, opts.env, Deno.env.toObject());
 
-    const clearVars = ["SERVER_ENVIRONMENT", "SERVICE_PORT", "DISABLE_HEALTH_CHECKS", "ENABLE_LOGS"];
+    const clearVars = ["SERVER_ENVIRONMENT", "SERVICE_PORT", "HEALTH_CHECK_ATTEMPTS", "ENABLE_LOGS"];
 
     clearVars.forEach(key => {
       delete env[key];

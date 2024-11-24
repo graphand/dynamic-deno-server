@@ -18,6 +18,23 @@ Deno.test("runCommand - failed command", async () => {
   );
 });
 
+// Additional runCommand tests
+Deno.test("runCommand - command with stderr output", async () => {
+  await assertRejects(
+    async () => {
+      // On Unix-like systems, this command produces stderr output
+      await runCommand(["ls", "/nonexistent"]);
+    },
+    Error,
+    "Command failed",
+  );
+});
+
+Deno.test("runCommand - command with spaces in arguments", async () => {
+  const result = await runCommand(["echo", "hello world"]);
+  assertEquals(result.trim(), "hello world");
+});
+
 // Test isDirectory
 Deno.test("isDirectory - existing directory", async () => {
   // Create temporary test directory
@@ -35,6 +52,30 @@ Deno.test("isDirectory - non-existing path", async () => {
   assertEquals(result, false);
 });
 
+// Additional isDirectory tests
+Deno.test("isDirectory - file path instead of directory", async () => {
+  const tempFile = await Deno.makeTempFile();
+  try {
+    const result = await isDirectory(tempFile);
+    assertEquals(result, false);
+  } finally {
+    await Deno.remove(tempFile);
+  }
+});
+
+Deno.test("isDirectory - symlink to directory", async () => {
+  const tempDir = await Deno.makeTempDir();
+  const symlinkPath = `${tempDir}_link`;
+  try {
+    await Deno.symlink(tempDir, symlinkPath);
+    const result = await isDirectory(symlinkPath);
+    assertEquals(result, true);
+  } finally {
+    await Deno.remove(symlinkPath);
+    await Deno.remove(tempDir);
+  }
+});
+
 // Test isFile
 Deno.test("isFile - existing file", async () => {
   // Create temporary test file
@@ -50,6 +91,30 @@ Deno.test("isFile - existing file", async () => {
 Deno.test("isFile - non-existing file", async () => {
   const result = await isFile("/path/to/nonexistent/file.txt");
   assertEquals(result, false);
+});
+
+// Additional isFile tests
+Deno.test("isFile - directory path instead of file", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const result = await isFile(tempDir);
+    assertEquals(result, false);
+  } finally {
+    await Deno.remove(tempDir);
+  }
+});
+
+Deno.test("isFile - symlink to file", async () => {
+  const tempFile = await Deno.makeTempFile();
+  const symlinkPath = `${tempFile}_link`;
+  try {
+    await Deno.symlink(tempFile, symlinkPath);
+    const result = await isFile(symlinkPath);
+    assertEquals(result, true);
+  } finally {
+    await Deno.remove(symlinkPath);
+    await Deno.remove(tempFile);
+  }
 });
 
 // Test normalizePath

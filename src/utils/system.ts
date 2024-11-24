@@ -22,10 +22,6 @@ export async function runCommand(cmd: string[]): Promise<string> {
   }
 }
 
-export async function runCommandNS(namespace: string, cmd: string[]): Promise<string> {
-  return await runCommand(["ip", "netns", "exec", namespace, ...cmd]);
-}
-
 export async function isDirectory(path: string): Promise<boolean> {
   try {
     const stat = await Deno.stat(path);
@@ -45,24 +41,21 @@ export async function isFile(path: string): Promise<boolean> {
 }
 
 export async function normalizePath(path: string): Promise<string> {
-  const realPath = await Deno.realPath(path);
-  const functionsDir = await Deno.realPath(CONFIG.funcDirectory);
-
-  if (!(await isDirectory(realPath))) {
+  if (!(await isDirectory(path))) {
     throw new Error(`Path ${path} is not a directory`);
   }
 
-  if (!realPath.startsWith(functionsDir)) {
-    throw new Error(`Path ${realPath} is not within ${functionsDir}`);
+  if (!path.startsWith(CONFIG.funcDirectory)) {
+    throw new Error(`Path ${path} is not within ${CONFIG.funcDirectory}`);
   }
 
-  const serverName = realPath.slice(functionsDir.length + 1);
+  const serverName = path.slice(CONFIG.funcDirectory.length + 1);
 
   if (!serverName || serverName.includes("/")) {
     throw new Error(`Path ${path} is not a valid server name`);
   }
 
-  const index = resolve(realPath, "index.ts");
+  const index = resolve(path, "index.ts");
   if (!(await isFile(index))) {
     throw new Error(`Path ${path} does not contain an index.ts file`);
   }

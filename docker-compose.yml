@@ -4,12 +4,12 @@ services:
     ports:
       - "9999:9999"
     volumes:
-      - /opt/functions:/opt/functions
-      - /opt/logs:/opt/logs
+      - ./.tmp/functions:/opt/functions
+      - ./.tmp/logs:/opt/logs
     environment:
       - ENABLE_LOGS=true
-      - DISABLE_HEALTH_CHECKS=false
+      - HEALTH_CHECK_ATTEMPTS=3
       - SERVICE_PORT=9999
-      - SERVER_ENVIRONMENT='{"KEY1":"value1","KEY2":"value2"}'
+      - SERVER_ENVIRONMENT={"KEY1":"value1","KEY2":"value2"}
     privileged: true
     restart: unless-stopped

@@ -1,6 +1,6 @@
-import { assertEquals, assertRejects } from "https://deno.land/std@0.200.0/testing/asserts.ts";
-import { validateCode, checkServerHealth, pollDirectory } from "./server.ts";
-import { afterEach, beforeEach, describe, it } from "https://deno.land/std@0.200.0/testing/bdd.ts";
+import { assertRejects } from "https://deno.land/std@0.200.0/testing/asserts.ts";
+import { validateCode, pollDirectory } from "./server.ts";
+import { describe, it } from "https://deno.land/std@0.200.0/testing/bdd.ts";
 
 describe("validateCode", () => {
   it("should pass for valid code", async () => {
@@ -29,29 +29,6 @@ describe("validateCode", () => {
 
     await assertRejects(() => validateCode(testDir), Error);
     await Deno.remove(testDir, { recursive: true });
-  });
-});
-
-describe("checkServerHealth", () => {
-  let server: Deno.Listener;
-  const testPort = 9876;
-
-  beforeEach(async () => {
-    server = await Deno.listen({ port: testPort });
-  });
-
-  afterEach(() => {
-    server.close();
-  });
-
-  it("should return true for healthy server", async () => {
-    const result = await checkServerHealth("127.0.0.1", testPort);
-    assertEquals(result, true);
-  });
-
-  it("should return false for non-existent server", async () => {
-    const result = await checkServerHealth("127.0.0.1", 12345);
-    assertEquals(result, false);
   });
 });
 

@@ -2,15 +2,16 @@ import { walk } from "https://deno.land/std@0.200.0/fs/walk.ts";
 import { normalizePath } from "./utils/system.ts";
 import { CONFIG } from "./config.ts";
 import { ServerManager } from "./services/ServerManager.ts";
+import { NamespaceService } from "./services/NamespaceService.ts";
+import { join } from "https://deno.land/std@0.200.0/path/mod.ts";
 
 const serverManager = new ServerManager();
 
 // Function to watch the main directory and manage child servers
 async function watchDirectory() {
-  const watcher = Deno.watchFs(CONFIG.funcDirectory);
-
   // Start watching immediately and scan directory concurrently
   const watchPromise = (async () => {
+    const watcher = Deno.watchFs(CONFIG.funcDirectory);
     console.log(`Watching directory ${CONFIG.funcDirectory}`);
 
     for await (const event of watcher) {
@@ -84,8 +85,8 @@ async function startMainServer() {
   await Deno.serve({ port: CONFIG.mainPort, onListen: () => null }, async req => {
     const url = new URL(req.url);
     const subdirectory = url.pathname.split("/")[1];
-    const normalizedPath = await normalizePath(`${CONFIG.funcDirectory}/${subdirectory}`);
-    const server = serverManager.getServer(normalizedPath);
+    const normalizedPath = await normalizePath(join(CONFIG.funcDirectory, subdirectory)).catch(console.error);
+    const server = normalizedPath && serverManager.getServer(normalizedPath);
 
     if (!server) {
       return new Response("Function not found", { status: 404 });
@@ -103,23 +104,15 @@ async function startMainServer() {
       return new Response("OK", { status: 200 });
     }
 
-    const targetUrl = new URL(
-      url.pathname.replace(`/${subdirectory}`, ""),
-      `http://${server.ipAddress}:${CONFIG.serverPort}`,
-    );
-    targetUrl.search = url.search;
-
     try {
-      const response = await fetch(targetUrl.toString(), {
-        method: req.method,
-        headers: req.headers,
-        body: req.body,
-      });
+      const targetUrl = new URL(
+        url.pathname.replace(`/${subdirectory}`, ""),
+        `http://127.0.0.1:${CONFIG.serverPort}`,
+      );
+      targetUrl.search = url.search;
 
-      return new Response(response.body, {
-        status: response.status,
-        headers: response.headers,
-      });
+      const namespaceService = new NamespaceService(server.namespace);
+      return await namespaceService.fetch(targetUrl.toString(), req);
     } catch (error) {
       return new Response(`Error forwarding request: ${(error as Error).message}`, { status: 502 });
     }

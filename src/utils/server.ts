@@ -1,3 +1,5 @@
+import { NamespaceService } from "../services/NamespaceService.ts";
+import { SubdirectoryServer } from "../types.ts";
 import { isDirectory } from "./system.ts";
 
 export async function validateCode(path: string) {
@@ -17,15 +19,17 @@ export async function validateCode(path: string) {
   }
 }
 
-export async function checkServerHealth(ipAddress: string, port: number): Promise<boolean> {
-  const maxAttempts = 5;
+export async function checkServerHealth(
+  server: SubdirectoryServer,
+  port: number,
+  maxAttempts: number,
+): Promise<boolean> {
   const retryDelay = 50;
+  const namespace = new NamespaceService(server.namespace);
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const conn = await Deno.connect({ hostname: ipAddress, port });
-      conn.close();
-      return true;
+      return await namespace.connect(port);
     } catch {
       const delay = retryDelay * Math.pow(3, i / 2);
       await new Promise(resolve => setTimeout(resolve, delay));
