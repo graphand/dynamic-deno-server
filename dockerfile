@@ -6,6 +6,6 @@ WORKDIR /app
 
 COPY src src
 
-RUN chmod +x ./scripts/*.sh
+RUN chmod +x ./src/scripts/*.sh
 
 CMD ["deno", "run", "--allow-all", "--quiet", "./src/index.ts"]
