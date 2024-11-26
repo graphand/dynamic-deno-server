@@ -4,7 +4,8 @@
   "description": "A dynamic Deno proxy server that auto-deploys subdirectories as isolated Deno servers using Linux network namespaces for secure multi-tenant hosting",
   "main": "src/index.ts",
   "scripts": {
-    "test": "deno test --allow-all"
+    "test": "deno test --allow-all",
+    "check": "deno lint && deno check src/index.ts"
   },
   "repository": {
     "type": "git",

@@ -21,5 +21,8 @@ jobs:
       - name: Setup environment
         run: mkdir -p /opt/functions && mkdir -p /opt/logs
 
+      - name: Check code
+        run: npm run check
+
       - name: Run tests
-        run: deno test --allow-all
+        run: npm run test
