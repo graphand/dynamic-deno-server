@@ -46,7 +46,7 @@ servers on the fly! 🪄
 5. **Request Proxying**: Incoming requests to the main server are proxied to the appropriate subdirectory
    server based on the URL path.
 6. **Logging (Optional)**: If enabled, the stdout and stderr of subdirectory servers are logged to files in
-   `/opt/logs/{serverName}/`.
+   `/opt/logs/{serverName}/` (with `.log` extension).
 7. **Cleanup**: If a subdirectory is removed, its server is stopped, and resources are cleaned up.
 
 ## Installation 📦
@@ -289,15 +289,15 @@ each subdirectory server are written to files in the `/opt/logs/{serverName}/` d
 
 - **Log Files**:
 
-  - **Standard Output**: `/opt/logs/{serverName}/stdout`
-  - **Standard Error**: `/opt/logs/{serverName}/stderr`
+  - **Standard Output**: `/opt/logs/{serverName}/stdout.log`
+  - **Standard Error**: `/opt/logs/{serverName}/stderr.log`
 
 - **Example**:
 
   Assuming you have a subdirectory server named `hello-world`, the logs will be located at:
 
-  - Standard Output: `/path/to/local/logs/hello-world/stdout`
-  - Standard Error: `/path/to/local/logs/hello-world/stderr`
+  - Standard Output: `/path/to/local/logs/hello-world/stdout.log`
+  - Standard Error: `/path/to/local/logs/hello-world/stderr.log`
 
 - **Note**: The logs directory and files are created automatically when logging is enabled and a subdirectory
   server is started.

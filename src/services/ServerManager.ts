@@ -61,8 +61,8 @@ export class ServerManager {
           // Create the directory if it doesn't exist
           await Deno.mkdir(logsDirectory, { recursive: true });
 
-          const outLogPath = resolve(logsDirectory, "stdout");
-          const errLogPath = resolve(logsDirectory, "stderr");
+          const outLogPath = resolve(logsDirectory, "stdout.log");
+          const errLogPath = resolve(logsDirectory, "stderr.log");
 
           // Create the files if they don't exist
           await Deno.writeTextFile(outLogPath, "");

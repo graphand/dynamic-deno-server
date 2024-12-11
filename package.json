@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "deno test --allow-all",
-    "check": "deno lint && deno check src/index.ts"
+    "check": "deno lint && deno check src/index.ts",
+    "push:docker": "docker build --platform=linux/amd64 -t pierrecabriere/dynamic-deno-server:$(jq -r .version < package.json) . && docker push pierrecabriere/dynamic-deno-server:$(jq -r .version < package.json)"
   },
   "repository": {
     "type": "git",
