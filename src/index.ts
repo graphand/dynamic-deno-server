@@ -1,11 +1,11 @@
 import { walk } from "https://deno.land/std@0.200.0/fs/walk.ts";
 import { normalizePath } from "./utils/system.ts";
 import { CONFIG } from "./config.ts";
-import { ServerManager } from "./services/ServerManager.ts";
+import { ServerService } from "./services/ServerService.ts";
 import { NamespaceService } from "./services/NamespaceService.ts";
 import { join } from "https://deno.land/std@0.200.0/path/mod.ts";
 
-const serverManager = new ServerManager();
+const serverManager = new ServerService();
 
 // Function to watch the main directory and manage child servers
 async function watchDirectory() {

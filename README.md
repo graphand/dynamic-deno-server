@@ -361,7 +361,7 @@ dynamic-deno-server/
 │   │   ├── start-server.sh
 │   │   └── stop-server.sh
 │   ├── services/
-│   │   ├── ServerManager.ts
+│   │   ├── ServerService.ts
 │   │   └── NamespaceService.ts
 │   └── utils/
 │       ├── server.ts
@@ -378,7 +378,7 @@ dynamic-deno-server/
   servers.
 - **config.ts**: Contains configuration like ports, main directory path, and logging settings.
 - **types.ts**: Defines TypeScript interfaces for the project.
-- **ServerManager.ts**: Manages starting and stopping of subdirectory servers.
+- **ServerService.ts**: Manages starting and stopping of subdirectory servers.
 - **NamespaceService.ts**: Handles creation and cleanup of network namespaces.
 - **utils/**: Contains utility functions for server validation and system commands.
 

@@ -1,10 +1,10 @@
-import { resolve } from "https://deno.land/std/path/mod.ts";
 import { SubdirectoryServer } from "../types.ts";
 import { NamespaceService } from "./NamespaceService.ts";
 import { CONFIG } from "../config.ts";
 import { validateCode, checkServerHealth, pollDirectory } from "../utils/server.ts";
+import { LogService } from "./LogService.ts";
 
-export class ServerManager {
+export class ServerService {
   private servers = new Map<string, SubdirectoryServer>();
 
   startServer(path: string, normalizedPath: string): void {
@@ -33,6 +33,8 @@ export class ServerManager {
     server: SubdirectoryServer,
     namespaceService: NamespaceService,
   ): Promise<void> {
+    let logService: LogService | null = null;
+
     try {
       await validateCode(path);
 
@@ -56,33 +58,9 @@ export class ServerManager {
       if (CONFIG.enableLogs) {
         const name = path.split("/").pop();
         if (name && child.stdout && child.stderr) {
-          const logsDirectory = resolve(CONFIG.logsDirectory, name);
-
-          // Create the directory if it doesn't exist
-          await Deno.mkdir(logsDirectory, { recursive: true });
-
-          const outLogPath = resolve(logsDirectory, "stdout.log");
-          const errLogPath = resolve(logsDirectory, "stderr.log");
-
-          // Create the files if they don't exist
-          await Deno.writeTextFile(outLogPath, "");
-          await Deno.writeTextFile(errLogPath, "");
-
-          // Create write streams for stdout and stderr
-          const stdoutStream = await Deno.open(outLogPath, {
-            write: true,
-            create: true,
-            append: true,
-          });
-          const stderrStream = await Deno.open(errLogPath, {
-            write: true,
-            create: true,
-            append: true,
-          });
-
-          // Pipe process output to log files
-          child.stdout.pipeTo(stdoutStream.writable);
-          child.stderr.pipeTo(stderrStream.writable);
+          logService = new LogService(CONFIG.logsDirectory);
+          await logService.initializeLogFile(name);
+          logService.setupProcessLogging(child).catch(console.error);
         }
       }
 
@@ -95,11 +73,9 @@ export class ServerManager {
       }
 
       console.log(`Server "${server.namespace}" is ready`);
-
       server.status = "ready";
     } catch (error) {
       console.error(`Server "${server.namespace}" failed to start: ${error}`);
-
       server.status = "failed";
       server.error = (error as Error).message;
     }
