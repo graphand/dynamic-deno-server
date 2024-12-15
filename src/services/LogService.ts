@@ -11,7 +11,7 @@ export class LogService {
   ) {}
 
   async initializeLogFile(serverName: string): Promise<void> {
-    await Deno.mkdir(this.logsDirectory, { recursive: true });
+    await Deno.mkdir(this.logsDirectory, { recursive: true }).catch(() => {});
     const logPath = resolve(this.logsDirectory, `${serverName}.log`);
     await Deno.writeTextFile(logPath, "");
 
