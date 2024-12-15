@@ -1,4 +1,3 @@
-// src/services/LogService.test.ts
 import {
   assert,
   assertEquals,
@@ -10,7 +9,7 @@ import { LogService } from "./LogService.ts";
 import { resolve } from "https://deno.land/std/path/mod.ts";
 
 describe("LogService", () => {
-  const testLogsDir = "./test_logs";
+  const testLogsDir = "./.tmp/test_logs";
   const testServerName = "test_server";
   let logService: LogService;
 
@@ -154,9 +153,6 @@ describe("LogService", () => {
 
       await logService.setupProcessLogging(mockProcess);
 
-      // Give some time for the async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       // Read the log file
       const logPath = resolve(testLogsDir, `${testServerName}.log`);
       const content = await Deno.readTextFile(logPath);
@@ -167,5 +163,39 @@ describe("LogService", () => {
       assert(JSON.parse(lines[0]).log === "test stdout\n");
       assert(JSON.parse(lines[1]).log === "test stderr\n");
     });
+  });
+
+  it("should handle multiline logs correctly in CRI format", async () => {
+    await logService.initializeLogFile(testServerName);
+
+    const encoder = new TextEncoder();
+    const multilineText = '{\n  "key": "value",\n  "another": "value"\n}';
+    const stdout = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(multilineText));
+        controller.close();
+      },
+    });
+
+    const mockProcess = {
+      stdout,
+      stderr: new ReadableStream(),
+    } as unknown as Deno.ChildProcess;
+
+    // Setup logging
+    await logService.setupProcessLogging(mockProcess);
+
+    // Add a small delay to ensure all streams are processed
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const logPath = resolve(testLogsDir, `${testServerName}.log`);
+    const content = await Deno.readTextFile(logPath);
+    const lines = content.split("\n").filter(line => line.length > 0);
+
+    assertEquals(lines.length, 4);
+    assert(lines[0].endsWith("stdout F {"));
+    assert(lines[1].endsWith('stdout F   "key": "value",'));
+    assert(lines[2].endsWith('stdout F   "another": "value"'));
+    assert(lines[3].endsWith("stdout F }"));
   });
 });

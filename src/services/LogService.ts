@@ -3,6 +3,7 @@ import { resolve } from "https://deno.land/std/path/mod.ts";
 export class LogService {
   private logStream: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private logFile: Deno.FsFile | null = null;
+  private loggingAbortController: AbortController | null = null;
 
   constructor(
     private readonly logsDirectory: string,
@@ -21,75 +22,100 @@ export class LogService {
     });
 
     this.logStream = this.logFile.writable.getWriter();
+    this.loggingAbortController = new AbortController();
   }
 
   async setupProcessLogging(process: Deno.ChildProcess): Promise<void> {
-    if (!this.logStream) {
+    if (!this.logStream || !this.loggingAbortController) {
       throw new Error("Log stream not initialized");
     }
 
-    const createLogTransform = (streamType: "stdout" | "stderr") => {
-      const logFormat = this.logFormat;
-      return new TransformStream({
-        transform(chunk, controller) {
-          const timestamp = new Date().toISOString();
-          const line = new TextDecoder().decode(chunk);
-          const tag = line.endsWith("\n") ? "F" : "P";
+    const signal = this.loggingAbortController.signal;
+    const logStream = this.logStream;
+    const logFormat = this.logFormat;
 
-          let logEntry;
-          if (logFormat === "cri") {
-            logEntry = `${timestamp} ${streamType} ${tag} ${line}`;
-          } else if (logFormat === "docker") {
-            logEntry = JSON.stringify({ log: line, stream: streamType, time: timestamp }) + "\n";
-          } else {
-            throw new Error(`Invalid log format: ${logFormat}`);
+    const createLogTransform = (streamType: "stdout" | "stderr") => {
+      return new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          if (signal.aborted) {
+            return;
           }
 
-          controller.enqueue(new TextEncoder().encode(logEntry));
+          const timestamp = new Date().toISOString();
+          const line = new TextDecoder().decode(chunk);
+
+          if (logFormat === "cri") {
+            const lines = line.split(/\r?\n/);
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i] === "") continue;
+              const tag = i === lines.length - 1 && !line.endsWith("\n") ? "P" : "F";
+              const logEntry = `${timestamp} ${streamType} ${tag} ${lines[i]}\n`;
+              controller.enqueue(new TextEncoder().encode(logEntry));
+            }
+          } else if (logFormat === "docker") {
+            const logEntry =
+              JSON.stringify({
+                log: line,
+                stream: streamType,
+                time: timestamp,
+              }) + "\n";
+            controller.enqueue(new TextEncoder().encode(logEntry));
+          } else {
+            controller.error(new Error(`Invalid log format: ${logFormat}`));
+          }
+        },
+      });
+    };
+
+    const createWritableStream = () => {
+      return new WritableStream<Uint8Array>({
+        write: async chunk => {
+          if (signal.aborted) {
+            throw new DOMException("Stream aborted", "AbortError");
+          }
+
+          await logStream.write(chunk);
         },
       });
     };
 
     try {
-      await Promise.all([
-        process.stdout.pipeThrough(createLogTransform("stdout")).pipeTo(
-          new WritableStream({
-            write: async chunk => {
-              if (this.logStream) {
-                await this.logStream.write(chunk);
-              }
-            },
-          }),
+      const streams = [
+        { readable: process.stdout, type: "stdout" as const },
+        { readable: process.stderr, type: "stderr" as const },
+      ];
+
+      await Promise.all(
+        streams.map(({ readable, type }) =>
+          readable
+            .pipeThrough(createLogTransform(type), { signal })
+            .pipeTo(createWritableStream(), { signal }),
         ),
-        process.stderr.pipeThrough(createLogTransform("stderr")).pipeTo(
-          new WritableStream({
-            write: async chunk => {
-              if (this.logStream) {
-                await this.logStream.write(chunk);
-              }
-            },
-          }),
-        ),
-      ]);
+      ).catch(console.error);
     } catch (error) {
       console.error("Error in process logging:", error);
     }
   }
 
   async close(): Promise<void> {
+    if (this.loggingAbortController) {
+      this.loggingAbortController.abort();
+      this.loggingAbortController = null;
+    }
+
     if (this.logStream) {
       await this.logStream.close();
       this.logStream = null;
     }
+
     if (this.logFile) {
       try {
         await this.logFile.close();
       } catch (error) {
         if (!(error instanceof Deno.errors.BadResource)) {
-          throw error; // Re-throw if it's not a BadResource error
+          throw error;
         }
       }
-
       this.logFile = null;
     }
   }
