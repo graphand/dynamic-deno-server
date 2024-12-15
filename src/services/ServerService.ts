@@ -22,7 +22,10 @@ export class ServerService {
     console.log(`Starting server "${normalizedPath}"`);
 
     pollDirectory(path).catch(() => {
-      this.stopServer(normalizedPath);
+      const server = this.getServer(normalizedPath);
+      if (server && server.status !== "failed") {
+        this.stopServer(normalizedPath);
+      }
     });
 
     server.readyPromise = this.initializeServer(path, server, namespaceService);
@@ -88,8 +91,15 @@ export class ServerService {
     this.servers.delete(normalizedPath);
 
     if (server.process) {
-      server.process.kill("SIGTERM");
-      await server.process.status;
+      try {
+        const status = await server.process.status;
+        if (!status.success) {
+          server.process.kill("SIGTERM");
+          await server.process.status;
+        }
+      } catch (error) {
+        console.error(`Error stopping server "${server.namespace}":`, error);
+      }
     }
 
     const namespaceService = new NamespaceService(server.namespace);
