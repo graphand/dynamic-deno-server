@@ -15,5 +15,6 @@ export const CONFIG = {
   serverPort: parseInt(Deno.env.get("SERVER_PORT") || "8000"),
   funcDirectory: await Deno.realPath("/opt/functions"),
   logsDirectory: await Deno.realPath("/opt/logs"),
+  logFormat: Deno.env.get("LOG_FORMAT") || "cri",
   serverEnvironment,
 };

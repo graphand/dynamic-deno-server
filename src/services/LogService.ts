@@ -4,7 +4,10 @@ export class LogService {
   private logStream: WritableStreamDefaultWriter<Uint8Array> | null = null;
   private logFile: Deno.FsFile | null = null;
 
-  constructor(private readonly logsDirectory: string) {}
+  constructor(
+    private readonly logsDirectory: string,
+    private readonly logFormat: "cri" | "docker" = "cri",
+  ) {}
 
   async initializeLogFile(serverName: string): Promise<void> {
     await Deno.mkdir(this.logsDirectory, { recursive: true });
@@ -25,16 +28,27 @@ export class LogService {
       throw new Error("Log stream not initialized");
     }
 
-    const createLogTransform = (streamType: "stdout" | "stderr") =>
-      new TransformStream({
+    const createLogTransform = (streamType: "stdout" | "stderr") => {
+      const logFormat = this.logFormat;
+      return new TransformStream({
         transform(chunk, controller) {
           const timestamp = new Date().toISOString();
           const line = new TextDecoder().decode(chunk);
           const tag = line.endsWith("\n") ? "F" : "P";
-          const criLog = `${timestamp} ${streamType} ${tag} ${line}`;
-          controller.enqueue(new TextEncoder().encode(criLog));
+
+          let logEntry;
+          if (logFormat === "cri") {
+            logEntry = `${timestamp} ${streamType} ${tag} ${line}`;
+          } else if (logFormat === "docker") {
+            logEntry = JSON.stringify({ log: line, stream: streamType, time: timestamp }) + "\n";
+          } else {
+            throw new Error(`Invalid log format: ${logFormat}`);
+          }
+
+          controller.enqueue(new TextEncoder().encode(logEntry));
         },
       });
+    };
 
     try {
       await Promise.all([

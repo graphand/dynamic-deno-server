@@ -11,5 +11,6 @@ services:
       - HEALTH_CHECK_ATTEMPTS=3
       - SERVICE_PORT=9999
       - SERVER_ENVIRONMENT={"KEY1":"value1","KEY2":"value2"}
+      - LOG_FORMAT=cri
     privileged: true
     restart: unless-stopped

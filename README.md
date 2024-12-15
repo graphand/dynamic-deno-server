@@ -143,6 +143,7 @@ services:
       - HEALTH_CHECK_ATTEMPTS=5
       - SERVICE_PORT=9999
       - SERVER_ENVIRONMENT={"KEY1":"value1","KEY2":"value2"}
+      - LOG_FORMAT=cri
     privileged: true
     restart: unless-stopped
 ```
@@ -184,6 +185,7 @@ The Dynamic Deno Server can be configured using environment variables:
   `false`).
 - `SERVER_ENVIRONMENT`: A stringified JSON object containing key-value pairs of environment variables you wish
   to make available to your subdirectory servers.
+- `LOG_FORMAT`: The format of the logs. Can be `cri` or `docker` (default: `cri`).
 
 ## Environment Variables for Subdirectory Servers 🌍
 
@@ -232,8 +234,8 @@ Deno.serve(req => new Response(`API Key: ${apiKey}, DB URL: ${dbUrl}`));
 
 - The `SERVER_ENVIRONMENT` value must be a valid JSON string
 - Environment variables are isolated to each subdirectory server
-- System environment variables (`SERVICE_PORT`, `HEALTH_CHECK_ATTEMPTS`, `ENABLE_LOGS`, `SERVER_ENVIRONMENT`)
-  are not passed to subdirectory servers for security reasons
+- System environment variables (`SERVICE_PORT`, `HEALTH_CHECK_ATTEMPTS`, `ENABLE_LOGS`, `SERVER_ENVIRONMENT`,
+  `LOG_FORMAT`) are not passed to subdirectory servers for security reasons
 - If the JSON string is invalid, an error will be logged, and no custom environment variables will be set
 
 ## Usage 📝
@@ -274,33 +276,55 @@ Goodbye from Goodbye World Function!
 ## Logs 📑
 
 If logging is enabled by setting the `ENABLE_LOGS` environment variable to `true`, the stdout and stderr of
-each subdirectory server are written to files in the `/opt/logs/{serverName}/` directory inside the container.
+each subdirectory server are written to a single log file in the `/opt/logs/` directory inside the container.
+The log file is named after the server, following the pattern `{serverName}.log`.
 
-- **Accessing Logs**: By binding the `/opt/logs` directory to a local directory on your host machine, you can
-  access the logs locally.
+### Log Format
 
-  For example, when running the Docker container, add the volume binding:
+The format of the logs is determined by the `LOG_FORMAT` environment variable, which can be set to either
+`cri` or `docker`:
 
-  ```bash
-  -v /path/to/local/logs:/opt/logs
+- **CRI (Kubernetes CRI Format)**: Logs are formatted with a timestamp, stream type (stdout or stderr), and a
+  tag indicating whether the line is complete (`F`) or partial (`P`).
+
+  Example:
+
+  ```
+  2024-12-15T11:06:22.074Z stdout F Hello from Hello World Function!
   ```
 
-  Replace `/path/to/local/logs` with the path where you want to store the logs on your host machine.
+- **Docker (Docker JSON-file Format)**: Logs are formatted as JSON objects containing the log message, stream
+  type, and timestamp.
 
-- **Log Files**:
+  Example:
 
-  - **Standard Output**: `/opt/logs/{serverName}/stdout.log`
-  - **Standard Error**: `/opt/logs/{serverName}/stderr.log`
+  ```json
+  { "log": "Hello from Hello World Function!\n", "stream": "stdout", "time": "2024-12-15T11:06:22.074Z" }
+  ```
 
-- **Example**:
+### Accessing Logs
 
-  Assuming you have a subdirectory server named `hello-world`, the logs will be located at:
+By binding the `/opt/logs` directory to a local directory on your host machine, you can access the logs
+locally. For example, when running the Docker container, add the volume binding:
 
-  - Standard Output: `/path/to/local/logs/hello-world/stdout.log`
-  - Standard Error: `/path/to/local/logs/hello-world/stderr.log`
+```bash
+-v /path/to/local/logs:/opt/logs
+```
 
-- **Note**: The logs directory and files are created automatically when logging is enabled and a subdirectory
-  server is started.
+Replace `/path/to/local/logs` with the path where you want to store the logs on your host machine.
+
+### Example
+
+Assuming you have a subdirectory server named `hello-world`, the logs will be located at:
+
+- Log File: `/path/to/local/logs/hello-world.log`
+
+### Note
+
+- The logs directory and files are created automatically when logging is enabled and a subdirectory server is
+  started.
+- Ensure that the `/opt/logs` directory has the correct permissions, especially if it contains sensitive
+  information.
 
 ## How to Stop the Server 🛑
 
@@ -358,16 +382,17 @@ dynamic-deno-server/
 │   ├── config.ts
 │   ├── types.ts
 │   ├── scripts/
-│   │   ├── start-server.sh
-│   │   └── stop-server.sh
+│   │   ├── cleanup-namespace.sh
+│   │   └── create-namespace.sh
 │   ├── services/
-│   │   ├── ServerService.ts
-│   │   └── NamespaceService.ts
+│   │   ├── LogService.ts
+│   │   ├── NamespaceService.ts
+│   │   └── ServerService.ts
 │   └── utils/
 │       ├── server.ts
 │       ├── system.ts
-├── dockerfile
 ├── docker-compose.yml
+├── dockerfile
 ├── package.json
 └── README.md
 ```
@@ -378,8 +403,11 @@ dynamic-deno-server/
   servers.
 - **config.ts**: Contains configuration like ports, main directory path, and logging settings.
 - **types.ts**: Defines TypeScript interfaces for the project.
-- **ServerService.ts**: Manages starting and stopping of subdirectory servers.
-- **NamespaceService.ts**: Handles creation and cleanup of network namespaces.
+- **scripts/cleanup-namespace.sh**: Contains shell scripts for creating and cleaning up network namespaces.
+- **scripts/create-namespace.sh**: Contains shell scripts for creating and cleaning up network namespaces.
+- **services/ServerService.ts**: Manages starting and stopping of subdirectory servers.
+- **services/NamespaceService.ts**: Handles creation and cleanup of network namespaces.
+- **services/LogService.ts**: Handles logging of subdirectory servers.
 - **utils/**: Contains utility functions for server validation and system commands.
 
 ## Security Considerations 🔒

@@ -126,4 +126,46 @@ describe("LogService", () => {
       await logService.close(); // Should not throw
     });
   });
+
+  describe("setupProcessLogging with Docker format", () => {
+    it("should log stdout and stderr in Docker JSON format", async () => {
+      logService = new LogService(testLogsDir, "docker");
+      await logService.initializeLogFile(testServerName);
+
+      // Create mock process with controlled output
+      const encoder = new TextEncoder();
+      const stdout = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("test stdout\n"));
+          controller.close();
+        },
+      });
+      const stderr = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("test stderr\n"));
+          controller.close();
+        },
+      });
+
+      const mockProcess = {
+        stdout,
+        stderr,
+      } as unknown as Deno.ChildProcess;
+
+      await logService.setupProcessLogging(mockProcess);
+
+      // Give some time for the async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Read the log file
+      const logPath = resolve(testLogsDir, `${testServerName}.log`);
+      const content = await Deno.readTextFile(logPath);
+      const lines = content.split("\n").filter(line => line.length > 0);
+
+      // Verify log format
+      assertEquals(lines.length, 2);
+      assert(JSON.parse(lines[0]).log === "test stdout\n");
+      assert(JSON.parse(lines[1]).log === "test stderr\n");
+    });
+  });
 });

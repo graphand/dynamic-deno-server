@@ -136,7 +136,13 @@ export class NamespaceService {
   ): Deno.ChildProcess {
     const env: Record<string, string> = Object.assign({}, opts.env, Deno.env.toObject());
 
-    const clearVars = ["SERVER_ENVIRONMENT", "SERVICE_PORT", "HEALTH_CHECK_ATTEMPTS", "ENABLE_LOGS"];
+    const clearVars = [
+      "SERVER_ENVIRONMENT",
+      "SERVICE_PORT",
+      "HEALTH_CHECK_ATTEMPTS",
+      "ENABLE_LOGS",
+      "LOG_FORMAT",
+    ];
 
     clearVars.forEach(key => {
       delete env[key];

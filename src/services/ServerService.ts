@@ -58,7 +58,7 @@ export class ServerService {
       if (CONFIG.enableLogs) {
         const name = path.split("/").pop();
         if (name && child.stdout && child.stderr) {
-          logService = new LogService(CONFIG.logsDirectory);
+          logService = new LogService(CONFIG.logsDirectory, CONFIG.logFormat as "cri" | "docker");
           await logService.initializeLogFile(name);
           logService.setupProcessLogging(child).catch(console.error);
         }
