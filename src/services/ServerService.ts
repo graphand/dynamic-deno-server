@@ -7,7 +7,7 @@ import { LogService } from "./LogService.ts";
 export class ServerService {
   private servers = new Map<string, SubdirectoryServer>();
 
-  startServer(path: string, normalizedPath: string): void {
+  startServer(path: string, normalizedPath: string, initNamespace: boolean = true): void {
     const namespace = NamespaceService.generateNamespaceName(path);
     const namespaceService = new NamespaceService(namespace);
 
@@ -28,25 +28,28 @@ export class ServerService {
       }
     });
 
-    server.readyPromise = this.initializeServer(path, server, namespaceService);
+    server.readyPromise = this.initializeServer(path, server, namespaceService, initNamespace);
   }
 
   private async initializeServer(
     path: string,
     server: SubdirectoryServer,
     namespaceService: NamespaceService,
+    initNamespace: boolean = true,
   ): Promise<void> {
     let logService: LogService | null = null;
 
     try {
       await validateCode(path);
 
-      if (await namespaceService.exists()) {
-        console.log(`Namespace ${server.namespace} already exists for path ${path}`);
-        return;
-      }
+      if (initNamespace) {
+        if (await namespaceService.exists()) {
+          console.log(`Namespace ${server.namespace} already exists for path ${path}`);
+          return;
+        }
 
-      await namespaceService.create();
+        await namespaceService.create();
+      }
 
       const child = await namespaceService.executeCommand(
         ["deno", "run", "--allow-all", "--quiet", `${path}/index.ts`],
@@ -84,7 +87,7 @@ export class ServerService {
     }
   }
 
-  async stopServer(normalizedPath: string): Promise<void> {
+  async stopServer(normalizedPath: string, cleanupNamespace: boolean = true): Promise<void> {
     const server = this.servers.get(normalizedPath);
     if (!server) return;
 
@@ -92,18 +95,17 @@ export class ServerService {
 
     if (server.process) {
       try {
-        const status = await server.process.status;
-        if (!status.success) {
-          server.process.kill("SIGTERM");
-          await server.process.status;
-        }
+        server.process.kill("SIGTERM");
+        await server.process.status;
       } catch (error) {
         console.error(`Error stopping server "${server.namespace}":`, error);
       }
     }
 
-    const namespaceService = new NamespaceService(server.namespace);
-    await namespaceService.cleanup();
+    if (cleanupNamespace) {
+      const namespaceService = new NamespaceService(server.namespace);
+      await namespaceService.cleanup();
+    }
 
     console.log(`Server "${server.namespace}" stopped`);
   }

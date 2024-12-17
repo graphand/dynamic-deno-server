@@ -6,18 +6,34 @@ import { NamespaceService } from "./services/NamespaceService.ts";
 import { join } from "https://deno.land/std@0.200.0/path/mod.ts";
 
 const serverManager = new ServerService();
+const pathRegex = new RegExp(`^${CONFIG.funcDirectory}/[^/]+`);
+const _getSubdirectory = (path: string) => path.match(pathRegex)?.[0];
+const _resolvePathSize = (path: string) => path.split("/").filter(Boolean).length;
+const _isTargetPath = (path: string, target: string) => _resolvePathSize(path) === _resolvePathSize(target);
+const watchEvents = ["create", "modify", "rename", "remove"] as Deno.FsEvent["kind"][];
+const WATCH_DEBOUNCE_DELAY = 300; // milliseconds
+const pendingOperations = new Map<string, number>();
 
 // Function to watch the main directory and manage child servers
 async function watchDirectory() {
   // Start watching immediately and scan directory concurrently
   const watchPromise = (async () => {
-    const watcher = Deno.watchFs(CONFIG.funcDirectory);
+    const watcher = Deno.watchFs(CONFIG.funcDirectory, { recursive: true });
     console.log(`Watching directory ${CONFIG.funcDirectory}`);
 
     for await (const event of watcher) {
-      if (!["create", "rename", "remove"].includes(event.kind)) continue;
+      if (!watchEvents.includes(event.kind)) continue;
 
-      for (const path of event.paths) {
+      const pathsArray = event.paths
+        .filter(path => path !== CONFIG.funcDirectory && !path.split("/").pop()?.startsWith("."))
+        .map(_getSubdirectory)
+        .filter(Boolean) as string[];
+
+      const paths = new Set(pathsArray);
+
+      if (!paths.size) continue;
+
+      for (const path of paths) {
         const normalizedPath = await normalizePath(path).catch(e => {
           console.error(`Failed to normalize path ${path}:`, e.message);
           return null;
@@ -25,23 +41,41 @@ async function watchDirectory() {
 
         if (!normalizedPath) continue;
 
-        // For create/rename events, start server if it's a directory
-        if (["create", "rename"].includes(event.kind)) {
-          const server = serverManager.getServer(normalizedPath);
-          if (!server) {
-            serverManager.startServer(path, normalizedPath);
+        const _processEvent = async () => {
+          const isFuncRemoved = event.kind === "remove" && event.paths.find(p => _isTargetPath(p, path));
+
+          if (isFuncRemoved) {
+            const server = serverManager.getServer(normalizedPath);
+            if (server) {
+              await serverManager.stopServer(normalizedPath);
+            }
+          } else {
+            const server = serverManager.getServer(normalizedPath);
+            console.log(`Event received on path ${normalizedPath}.`);
+
+            if (server) {
+              await serverManager.stopServer(normalizedPath, false);
+            }
+
+            serverManager.startServer(path, normalizedPath, !server);
           }
+
+          pendingOperations.delete(normalizedPath);
+        };
+
+        if (!WATCH_DEBOUNCE_DELAY) {
+          await _processEvent();
+          return;
         }
 
-        // For remove events, stop server if we have one running
-        if (["remove"].includes(event.kind)) {
-          const server = serverManager.getServer(normalizedPath);
-          if (server) {
-            await serverManager.stopServer(normalizedPath).catch(error => {
-              console.error(`Failed to stop child server for ${normalizedPath}:`, error);
-            });
-          }
+        // Clear any existing timeout for this path
+        const existingTimeout = pendingOperations.get(normalizedPath);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
         }
+
+        // Set new timeout for this path
+        pendingOperations.set(normalizedPath, setTimeout(_processEvent, WATCH_DEBOUNCE_DELAY));
       }
     }
   })();

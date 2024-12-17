@@ -13,8 +13,8 @@ export const CONFIG = {
   healthCheckAttempts: parseInt(Deno.env.get("HEALTH_CHECK_ATTEMPTS") || "5"),
   enableLogs: Deno.env.get("ENABLE_LOGS") === "true",
   serverPort: parseInt(Deno.env.get("SERVER_PORT") || "8000"),
-  funcDirectory: await Deno.realPath("/opt/functions"),
-  logsDirectory: await Deno.realPath("/opt/logs"),
+  funcDirectory: await Deno.realPath(Deno.env.get("FUNC_DIRECTORY") || "/opt/functions"),
+  logsDirectory: await Deno.realPath(Deno.env.get("LOGS_DIRECTORY") || "/opt/logs"),
   logFormat: Deno.env.get("LOG_FORMAT") || "cri",
   serverEnvironment,
 };
