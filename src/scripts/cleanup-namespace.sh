@@ -2,18 +2,12 @@
 set -e
 
 NAMESPACE=$1
+[ -z "$NAMESPACE" ] && exit 1
 
-if [ -z "$NAMESPACE" ]; then
-    echo "Usage: $0 <namespace>"
-    exit 1
-fi
+# Calculate hash and cleanup in one go
+HASH=$(echo "$NAMESPACE" | md5sum | cut -c1-8)
+rm -rf "/etc/netns/${NAMESPACE}" 2>/dev/null || true
+ip link delete "veth_${HASH}" 2>/dev/null || true
+ip netns del "${NAMESPACE}" 2>/dev/null || true
 
-# Clean up DNS configuration if it exists
-if [ -d "/etc/netns/${NAMESPACE}" ]; then
-    rm -rf "/etc/netns/${NAMESPACE}"
-fi
-
-# Remove network namespace if it exists
-if ip netns list | grep -q "^${NAMESPACE}"; then
-    ip netns del "${NAMESPACE}"
-fi
+# Note: We don't remove the bridge or global iptables rules as they are shared with other namespaces

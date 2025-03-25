@@ -49,6 +49,46 @@ servers on the fly! 🪄
    `/opt/logs/{serverName}/` (with `.log` extension).
 7. **Cleanup**: If a subdirectory is removed, its server is stopped, and resources are cleaned up.
 
+## Network Architecture & Namespace Management 🔌
+
+The Dynamic Deno Server uses Linux network namespaces to isolate each subdirectory server. Here's how the
+networking is managed:
+
+### Bridge Setup
+
+- During container startup, a bridge interface named `netns-bridge` is created
+- The bridge is assigned the IP address `100.64.0.1/10` (from the Carrier-Grade NAT range)
+- IP forwarding is enabled and iptables rules are set up for proper NAT and forwarding
+
+### Namespace Creation Process
+
+1. **Namespace Creation**: For each subdirectory, a unique network namespace is created using `ip netns add`
+2. **DNS Configuration**: Each namespace gets its own DNS configuration using Cloudflare's `1.1.1.1`
+3. **IP Assignment**: A unique IP address is calculated from the MD5 hash of the namespace name:
+   - The first 8 characters of the hash are converted to a decimal value
+   - This value is transformed into an IP address in the `100.64.0.0/10` range
+   - This ensures consistent, unique IPs for each namespace
+4. **Interface Setup**:
+   - A virtual ethernet pair (veth/vpeer) is created for each namespace
+   - One end stays in the host namespace connected to the bridge
+   - The other end is moved into the namespace with the calculated IP
+   - Default routes are established so traffic can flow between namespaces
+
+### Namespace Cleanup
+
+- When a subdirectory is removed, the namespace cleanup script:
+  - Removes the namespace configuration files
+  - Deletes the virtual ethernet interface
+  - Removes the namespace itself
+- The main bridge remains intact to serve other namespaces
+
+### Advantages of This Approach
+
+- **Complete Network Isolation**: Each server has its own network stack
+- **Resource Control**: Limits the network resources available to each server
+- **Security**: Prevents direct communication between servers
+- **Scalability**: Efficiently manages multiple servers with minimal resource overhead
+
 ## Installation 📦
 
 Clone the repository:
