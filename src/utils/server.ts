@@ -1,3 +1,4 @@
+import { CONFIG } from "../config.ts";
 import { NamespaceService } from "../services/NamespaceService.ts";
 import { SubdirectoryServer } from "../types.ts";
 import { isDirectory } from "./system.ts";
@@ -8,6 +9,8 @@ export async function validateCode(path: string) {
     args: cmd.slice(1),
     stdout: "piped",
     stderr: "piped",
+    env: CONFIG.serverEnvironment,
+    clearEnv: true,
   });
 
   const child = command.spawn();

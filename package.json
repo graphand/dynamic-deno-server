@@ -1,6 +1,6 @@
 {
   "name": "dynamic-deno-server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A dynamic Deno proxy server that auto-deploys subdirectories as isolated Deno servers using Linux network namespaces for secure multi-tenant hosting",
   "main": "src/index.ts",
   "scripts": {
