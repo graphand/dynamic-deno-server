@@ -10,7 +10,6 @@ export async function validateCode(path: string) {
     stdout: "piped",
     stderr: "piped",
     env: CONFIG.serverEnvironment,
-    clearEnv: true,
   });
 
   const child = command.spawn();
