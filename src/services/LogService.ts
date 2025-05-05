@@ -1,4 +1,4 @@
-import { resolve } from "https://deno.land/std/path/mod.ts";
+import { resolve } from "path";
 
 export class LogService {
   private logStream: WritableStreamDefaultWriter<Uint8Array> | null = null;

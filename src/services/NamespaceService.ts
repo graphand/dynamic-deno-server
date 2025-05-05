@@ -1,5 +1,5 @@
 import { runCommand } from "../utils/system.ts";
-import { resolve } from "https://deno.land/std@0.200.0/path/mod.ts";
+import { resolve } from "path";
 
 export class NamespaceService {
   constructor(private readonly namespace: string) {}

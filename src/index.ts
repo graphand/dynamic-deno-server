@@ -1,9 +1,9 @@
-import { walk } from "https://deno.land/std@0.200.0/fs/walk.ts";
+import { walk } from "fs";
 import { normalizePath } from "./utils/system.ts";
 import { CONFIG } from "./config.ts";
 import { ServerService } from "./services/ServerService.ts";
 import { NamespaceService } from "./services/NamespaceService.ts";
-import { join } from "https://deno.land/std@0.200.0/path/mod.ts";
+import { join } from "path";
 
 const serverManager = new ServerService();
 const pathRegex = new RegExp(`^${CONFIG.funcDirectory}/[^/]+`);

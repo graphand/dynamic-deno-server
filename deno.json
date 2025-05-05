@@ -1,0 +1,35 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.205.0/",
+    "path": "https://deno.land/std@0.205.0/path/mod.ts",
+    "fs": "https://deno.land/std@0.205.0/fs/mod.ts",
+    "http": "https://deno.land/std@0.205.0/http/mod.ts"
+  },
+  "tasks": {
+    "start": "deno run --allow-all src/index.ts",
+    "dev": "deno run --allow-all --watch src/index.ts",
+    "test": "deno test --allow-all",
+    "lint": "deno lint",
+    "check": "deno check src/index.ts"
+  },
+  "lint": {
+    "files": {
+      "include": ["src/"]
+    },
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "files": {
+      "include": ["src/"]
+    },
+    "options": {
+      "useTabs": false,
+      "lineWidth": 100,
+      "indentWidth": 2,
+      "singleQuote": false,
+      "proseWrap": "preserve"
+    }
+  }
+}

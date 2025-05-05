@@ -1,4 +1,4 @@
-import { resolve } from "https://deno.land/std@0.200.0/path/resolve.ts";
+import { resolve } from "path";
 import { CONFIG } from "../config.ts";
 
 export async function runCommand(cmd: string[]): Promise<string> {

@@ -25,6 +25,7 @@ servers on the fly! 🪄
 - [How to Stop the Server 🛑](#how-to-stop-the-server-)
 - [Contributing 🤝](#contributing-)
 - [License 📄](#license-)
+- [Import Map](#import-map)
 
 ## Features ✨
 
@@ -480,3 +481,29 @@ Happy Coding! 🎉
 
 **Note**: Remember to replace `/path/to/local/logs` with the actual path where you want to store the logs on
 your host machine when running the Docker container.
+
+## Import Map
+
+This project uses Deno's import map feature to manage dependencies. The import map is defined in `deno.json`
+and provides aliased imports for standard libraries and modules:
+
+```json
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.205.0/",
+    "path": "https://deno.land/std@0.205.0/path/mod.ts",
+    "fs": "https://deno.land/std@0.205.0/fs/mod.ts",
+    "http": "https://deno.land/std@0.205.0/http/mod.ts"
+  }
+}
+```
+
+This allows for cleaner imports in the codebase:
+
+```typescript
+// Instead of:
+import { resolve } from "https://deno.land/std@0.205.0/path/mod.ts";
+
+// You can use:
+import { resolve } from "path";
+```
