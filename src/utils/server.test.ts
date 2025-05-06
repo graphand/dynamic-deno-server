@@ -1,6 +1,6 @@
-import { assertRejects } from "https://deno.land/std@0.200.0/testing/asserts.ts";
+import { assertRejects } from "https://deno.land/std@0.205.0/testing/asserts.ts";
 import { validateCode, pollDirectory } from "./server.ts";
-import { describe, it } from "https://deno.land/std@0.200.0/testing/bdd.ts";
+import { describe, it } from "https://deno.land/std@0.205.0/testing/bdd.ts";
 
 describe("validateCode", () => {
   it("should pass for valid code", async () => {

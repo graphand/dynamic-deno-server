@@ -1,15 +1,14 @@
 import { CONFIG } from "../config.ts";
-import { NamespaceService } from "../services/NamespaceService.ts";
 import { SubdirectoryServer } from "../types.ts";
 import { isDirectory } from "./system.ts";
 
-export async function validateCode(path: string) {
-  const cmd = ["deno", "check", "--quiet", "--all", "--allow-import", `${path}/index.ts`];
+export async function validateCode(args: string[]) {
+  const cmd = ["deno", "check", "--quiet", "--all", "--allow-import", ...args];
   const command = new Deno.Command(cmd[0], {
     args: cmd.slice(1),
     stdout: "piped",
     stderr: "piped",
-    env: CONFIG.serverEnvironment,
+    env: CONFIG.envJSON,
   });
 
   const child = command.spawn();
@@ -21,17 +20,25 @@ export async function validateCode(path: string) {
   }
 }
 
-export async function checkServerHealth(
-  server: SubdirectoryServer,
-  port: number,
-  maxAttempts: number,
-): Promise<boolean> {
+export async function checkServerHealth(server: SubdirectoryServer, maxAttempts: number): Promise<boolean> {
   const retryDelay = 50;
-  const namespace = new NamespaceService(server.namespace);
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      return await namespace.connect(port);
+      // Create a request to check if the server is ready
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 1000);
+
+      const response = await fetch(`http://localhost:${server.port}`, {
+        method: "HEAD",
+        headers: {
+          "x-graphand-healthcheck": "true",
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(id);
+      return response.status === 200;
     } catch {
       const delay = retryDelay * Math.pow(3, i / 2);
       await new Promise(resolve => setTimeout(resolve, delay));

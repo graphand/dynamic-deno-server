@@ -1,23 +1,16 @@
-FROM --platform=${TARGETPLATFORM:-linux/amd64} denoland/deno:alpine-2.1.1
+# Use the latest Deno image
+FROM denoland/deno:latest
 
-# Install minimal dependencies required for networking
-RUN apk add --no-cache --update \
-    iproute2 \
-    curl \
-    iptables \
-    && rm -rf /var/cache/apk/*
-
+# Set the working directory
 WORKDIR /app
 
-# Copy application source
-COPY src /app/src
+# Copy the source code
+COPY src .
+COPY deno.json .
+COPY entrypoint.sh .
 
-# Make scripts executable
-RUN chmod +x /app/src/scripts/*.sh
+# Make the entrypoint script executable
+RUN chmod +x ./entrypoint.sh
 
-# Set entrypoint script
-RUN chmod +x /app/src/scripts/entrypoint.sh
-ENTRYPOINT ["/app/src/scripts/entrypoint.sh"]
-
-# Command to run the application
-CMD ["deno", "run", "--allow-all", "--quiet", "/app/src/index.ts"]
+# Set the entrypoint script
+ENTRYPOINT ["./entrypoint.sh"]

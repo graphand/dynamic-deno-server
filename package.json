@@ -1,12 +1,12 @@
 {
   "name": "dynamic-deno-server",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "description": "A dynamic Deno proxy server that auto-deploys subdirectories as isolated Deno servers using Linux network namespaces for secure multi-tenant hosting",
   "main": "src/index.ts",
   "scripts": {
     "test": "deno test --allow-all",
     "check": "deno lint && deno check src/index.ts",
-    "push:docker": "docker build --platform=linux/amd64 -t pierrecabriere/dynamic-deno-server:$(jq -r .version < package.json) . && docker push pierrecabriere/dynamic-deno-server:$(jq -r .version < package.json)"
+    "push:docker": "docker buildx create --use --name multi-platform-builder --platform linux/amd64,linux/arm64 || true && docker buildx build --platform linux/amd64,linux/arm64 -t pierrecabriere/dynamic-deno-server:$(jq -r .version < package.json) -t pierrecabriere/dynamic-deno-server:latest --push ."
   },
   "repository": {
     "type": "git",

@@ -1,5 +1,6 @@
 export interface SubdirectoryServer {
-  namespace: string;
+  path: string;
+  port: number;
   status: "starting" | "ready" | "failed";
   error?: string;
   process?: Deno.ChildProcess;

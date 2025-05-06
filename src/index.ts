@@ -2,123 +2,139 @@ import { walk } from "fs";
 import { normalizePath } from "./utils/system.ts";
 import { CONFIG } from "./config.ts";
 import { ServerService } from "./services/ServerService.ts";
-import { NamespaceService } from "./services/NamespaceService.ts";
 import { join } from "path";
+import { debug } from "./utils/debug.ts";
 
 const serverManager = new ServerService();
 const pathRegex = new RegExp(`^${CONFIG.funcDirectory}/[^/]+`);
 const _getSubdirectory = (path: string) => path.match(pathRegex)?.[0];
-const _resolvePathSize = (path: string) => path.split("/").filter(Boolean).length;
-const _isTargetPath = (path: string, target: string) => _resolvePathSize(path) === _resolvePathSize(target);
-const watchEvents = ["create", "modify", "rename", "remove"] as Deno.FsEvent["kind"][];
-const WATCH_DEBOUNCE_DELAY = 300; // milliseconds
-const pendingOperations = new Map<string, number>();
 
-// Function to watch the main directory and manage child servers
-async function watchDirectory() {
-  // Start watching immediately and scan directory concurrently
-  const watchPromise = (async () => {
-    const watcher = Deno.watchFs(CONFIG.funcDirectory, { recursive: true });
-    console.log(`Watching directory ${CONFIG.funcDirectory}`);
-
-    for await (const event of watcher) {
-      if (!watchEvents.includes(event.kind)) continue;
-
-      const pathsArray = event.paths
-        .filter(path => path !== CONFIG.funcDirectory && !path.split("/").pop()?.startsWith("."))
-        .map(_getSubdirectory)
-        .filter(Boolean) as string[];
-
-      const paths = new Set(pathsArray);
-
-      if (!paths.size) continue;
-
-      for (const path of paths) {
-        const normalizedPath = await normalizePath(path).catch(e => {
-          console.error(`Failed to normalize path ${path}:`, e.message);
-          return null;
-        });
-
-        if (!normalizedPath) continue;
-
-        const _processEvent = async () => {
-          const isFuncRemoved = event.kind === "remove" && event.paths.find(p => _isTargetPath(p, path));
-
-          if (isFuncRemoved) {
-            const server = serverManager.getServer(normalizedPath);
-            if (server) {
-              await serverManager.stopServer(normalizedPath);
-            }
-          } else {
-            const server = serverManager.getServer(normalizedPath);
-            console.log(`Event received on path ${normalizedPath}.`);
-
-            if (server) {
-              await serverManager.stopServer(normalizedPath, false);
-            }
-
-            serverManager.startServer(path, normalizedPath, !server);
-          }
-
-          pendingOperations.delete(normalizedPath);
-        };
-
-        if (!WATCH_DEBOUNCE_DELAY) {
-          await _processEvent();
-          return;
-        }
-
-        // Clear any existing timeout for this path
-        const existingTimeout = pendingOperations.get(normalizedPath);
-        if (existingTimeout) {
-          clearTimeout(existingTimeout);
-        }
-
-        // Set new timeout for this path
-        pendingOperations.set(normalizedPath, setTimeout(_processEvent, WATCH_DEBOUNCE_DELAY));
-      }
-    }
-  })();
-
-  // Scan existing directories concurrently with watching
-  const entries = new Set<string>();
-  for await (const entry of walk(CONFIG.funcDirectory, {
-    maxDepth: 1,
-    includeDirs: true,
-  })) {
-    if (entry.isDirectory && entry.path !== CONFIG.funcDirectory) {
-      entries.add(entry.path);
-    }
+// Permission checker
+async function checkPermissions() {
+  try {
+    await Deno.stat(CONFIG.funcDirectory);
+  } catch {
+    console.error(`Directory ${CONFIG.funcDirectory} does not exist or cannot be accessed`);
+    Deno.exit(1);
   }
 
-  // Start all existing subdirectory servers concurrently
-  await Promise.all(
-    Array.from(entries).map(async entry => {
-      const normalizedPath = await normalizePath(entry).catch(e => {
-        console.error(e.message);
-        return null;
-      });
+  try {
+    await Deno.stat(CONFIG.logsDirectory);
+  } catch {
+    if (CONFIG.saveLogs) {
+      debug(`Creating log directory ${CONFIG.logsDirectory}`);
+      await Deno.mkdir(CONFIG.logsDirectory, { recursive: true });
+    }
+  }
+}
 
-      if (!normalizedPath) return;
+// Setup cleanup handlers for server on exit
+function setupCleanupHandlers() {
+  const cleanup = async () => {
+    debug("Shutting down servers gracefully...");
+    const servers = serverManager.getAllServers();
+    const promises = [];
 
-      const server = serverManager.getServer(normalizedPath);
-      if (!server) {
-        serverManager.startServer(entry, normalizedPath);
+    for (const [normalizedPath] of servers) {
+      promises.push(serverManager.stopServer(normalizedPath));
+    }
+
+    await Promise.all(promises);
+    debug("All servers stopped");
+    Deno.exit(0);
+  };
+
+  Deno.addSignalListener("SIGINT", cleanup);
+  Deno.addSignalListener("SIGTERM", cleanup);
+}
+
+// Main function to watch the directory
+async function watchDirectory() {
+  // Initial directory scan
+  await scanForDirectories();
+
+  // Watch directory for changes
+  const watcher = Deno.watchFs(CONFIG.funcDirectory);
+  debug(`Watching directory ${CONFIG.funcDirectory} for changes`);
+
+  for await (const event of watcher) {
+    if (event.kind === "create" || event.kind === "modify") {
+      for (const path of event.paths) {
+        const subdirectory = _getSubdirectory(path);
+        if (subdirectory) await handleSubdirectoryChange(subdirectory);
       }
-    }),
-  );
+    } else if (event.kind === "remove") {
+      for (const path of event.paths) {
+        const subdirectory = _getSubdirectory(path);
+        if (subdirectory) await handleSubdirectoryRemoval(subdirectory);
+      }
+    }
+  }
+}
 
-  // Keep the watcher running
-  await watchPromise;
+// Scan for all existing subdirectories
+async function scanForDirectories() {
+  debug(`Scanning ${CONFIG.funcDirectory} for existing subdirectories`);
+
+  for await (const entry of walk(CONFIG.funcDirectory, { maxDepth: 1 })) {
+    if (entry.isDirectory && entry.path !== CONFIG.funcDirectory) {
+      await handleSubdirectoryChange(entry.path);
+    }
+  }
+}
+
+// Handle creation or modification of a subdirectory
+async function handleSubdirectoryChange(path: string) {
+  try {
+    // Normalize the path and check if it's a valid server directory
+    const normalizedPath = await normalizePath(path).catch(console.error);
+
+    if (!normalizedPath) {
+      return;
+    }
+
+    // Check if server is already running
+    const existingServer = serverManager.getServer(normalizedPath);
+
+    if (existingServer && existingServer.status !== "failed") {
+      return; // Server already running
+    }
+
+    // Start the server
+    serverManager.startServer(path, normalizedPath);
+  } catch (error) {
+    console.error(`Error handling subdirectory change for ${path}:`, error);
+  }
+}
+
+// Handle removal of a subdirectory
+async function handleSubdirectoryRemoval(path: string) {
+  try {
+    // Check if directory still exists (handle partial removals)
+    const exists = await Deno.stat(path)
+      .then(() => true)
+      .catch(() => false);
+    if (exists) return;
+
+    // Get server name from path
+    const normalizedPath = path.split("/").pop();
+    if (!normalizedPath) return;
+
+    // Stop server if running
+    await serverManager.stopServer(normalizedPath);
+  } catch (error) {
+    console.error(`Error handling subdirectory removal for ${path}:`, error);
+  }
 }
 
 // Main server to dispatch requests
 async function startMainServer() {
-  console.log(`Main server running on port ${CONFIG.mainPort}`);
+  debug(`Main server running on port ${CONFIG.mainPort}`);
 
   await Deno.serve({ port: CONFIG.mainPort, onListen: () => null }, async req => {
     const url = new URL(req.url);
-    const subdirectory = url.pathname.split("/")[1];
+    const subdirectory = decodeURI(url.pathname.split("/")[1]);
+
     const normalizedPath = await normalizePath(join(CONFIG.funcDirectory, subdirectory)).catch(console.error);
     const server = normalizedPath && serverManager.getServer(normalizedPath);
 
@@ -139,44 +155,35 @@ async function startMainServer() {
     }
 
     try {
+      // Forward request to the server on its allocated port
       const targetUrl = new URL(
-        url.pathname.replace(`/${subdirectory}`, ""),
-        `http://127.0.0.1:${CONFIG.serverPort}`,
+        // remove the first segment
+        url.pathname.split("/").filter(Boolean).slice(1).join("/"),
+        `http://localhost:${server.port}`,
       );
       targetUrl.search = url.search;
 
-      const namespaceService = new NamespaceService(server.namespace);
-      return await namespaceService.fetch(targetUrl.toString(), req);
+      // Clone the request with the new URL
+      const requestInit: RequestInit = {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        redirect: "follow",
+      };
+
+      // Forward the request
+      const response = await fetch(targetUrl.toString(), requestInit);
+
+      // Create a new response with the headers and status from the response
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     } catch (error) {
       return new Response(`Error forwarding request: ${(error as Error).message}`, { status: 502 });
     }
   });
-}
-
-// Function to cleanup all child servers
-async function cleanupServers() {
-  const servers = serverManager.getAllServers();
-  const promises = Array.from(servers.keys()).map(normalizedPath => serverManager.stopServer(normalizedPath));
-  await Promise.all(promises);
-  Deno.exit(0);
-}
-
-// Add signal handlers for cleanup
-function setupCleanupHandlers() {
-  const signals = ["SIGINT", "SIGTERM", "SIGQUIT"] as const;
-  for (const signal of signals) {
-    Deno.addSignalListener(signal, () => {
-      cleanupServers();
-    });
-  }
-}
-
-// Function to check necessary permissions
-async function checkPermissions() {
-  const permissions = await Deno.permissions.query({ name: "run" });
-  if (permissions.state !== "granted") {
-    throw new Error("Run permission is required to execute commands");
-  }
 }
 
 // Main function
@@ -188,4 +195,7 @@ async function main() {
   await Promise.all([watchPromise, serverPromise]);
 }
 
-main().catch(console.error);
+main().catch(error => {
+  console.error("Main process error:", error);
+  Deno.exit(1);
+});
