@@ -24,7 +24,7 @@ export class ServerService {
 
     this.servers.set(normalizedPath, server);
 
-    debug(`Starting server "${normalizedPath}" on port ${port}`);
+    debug(`Starting server "${normalizedPath}"`);
 
     pollDirectory(path).catch(() => {
       const server = this.getServer(normalizedPath);
@@ -36,13 +36,20 @@ export class ServerService {
     server.readyPromise = this.initializeServer(path, server, normalizedPath);
   }
 
+  private getPublicEnv(): Record<string, string> {
+    const PREFIX = "PUBLIC_DENO_";
+    const publicEntries = Object.entries(Deno.env.toObject()).filter(([key]) => key.startsWith(PREFIX));
+    return Object.fromEntries(publicEntries.map(([key, value]) => [key.replace(PREFIX, ""), value]));
+  }
+
   private async initializeServer(
     path: string,
     server: SubdirectoryServer,
     normalizedPath: string,
   ): Promise<void> {
     try {
-      const env = { ...CONFIG.envJSON, PORT: server.port.toString() };
+      const publicEnv = this.getPublicEnv();
+      const env = { ...publicEnv, ...CONFIG.envJSON, __RUNNER_PORT__: server.port.toString() };
       const serverName = path.split("/").pop() || normalizedPath;
 
       const { configArgs, serverEntryPath } = await this.resolveServerPaths(path);
@@ -65,7 +72,7 @@ export class ServerService {
         }
       }
 
-      debug(`Server "${normalizedPath}" is ready on port ${server.port}`);
+      debug(`Server "${normalizedPath}" is ready`);
       server.status = "ready";
 
       // Set up file watching if enabled

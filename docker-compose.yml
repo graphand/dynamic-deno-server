@@ -14,4 +14,7 @@ services:
       - ENV_FILE=./.env
       - LOG_FORMAT=cri
       - WATCH_FILES=true
+      - DEBUG=*
+      - PUBLIC_DENO_FOO=baz
+      - PUBLIC_DENO_BAR=qux
     restart: unless-stopped

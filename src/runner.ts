@@ -7,7 +7,11 @@ const originalServe = Deno.serve;
 // Override Deno.serve with our custom implementation that forces the PORT
 // @ts-ignore - We're intentionally overriding the typing to inject our port
 Deno.serve = function (...args: unknown[]) {
-  const port = Number(Deno.env.get("PORT"));
+  const port = Number(Deno.env.get("__RUNNER_PORT__"));
+
+  if (!port) {
+    throw new Error("__RUNNER_PORT__ is not set");
+  }
 
   // Handle different ways of calling Deno.serve
   if (args.length === 1 && typeof args[0] === "function") {

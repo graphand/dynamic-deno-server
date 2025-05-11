@@ -50,6 +50,38 @@ function setupCleanupHandlers() {
 
 // Main function to watch the directory
 async function watchDirectory() {
+  // Debounce timers to handle rapid changes
+  const debounceTimers = new Map<string, number>();
+  const DEBOUNCE_DELAY = 500; // ms
+
+  // Debounced handler for subdirectory changes
+  const debouncedHandleChange = (subdirectory: string) => {
+    if (debounceTimers.has(subdirectory)) {
+      clearTimeout(debounceTimers.get(subdirectory));
+    }
+
+    const timerId = setTimeout(async () => {
+      await handleSubdirectoryChange(subdirectory);
+      debounceTimers.delete(subdirectory);
+    }, DEBOUNCE_DELAY);
+
+    debounceTimers.set(subdirectory, timerId);
+  };
+
+  // Debounced handler for subdirectory removals
+  const debouncedHandleRemoval = (subdirectory: string) => {
+    if (debounceTimers.has(subdirectory)) {
+      clearTimeout(debounceTimers.get(subdirectory));
+    }
+
+    const timerId = setTimeout(async () => {
+      await handleSubdirectoryRemoval(subdirectory);
+      debounceTimers.delete(subdirectory);
+    }, DEBOUNCE_DELAY);
+
+    debounceTimers.set(subdirectory, timerId);
+  };
+
   // Initial directory scan
   await scanForDirectories();
 
@@ -61,12 +93,12 @@ async function watchDirectory() {
     if (event.kind === "create" || event.kind === "modify") {
       for (const path of event.paths) {
         const subdirectory = _getSubdirectory(path);
-        if (subdirectory) await handleSubdirectoryChange(subdirectory);
+        if (subdirectory) debouncedHandleChange(subdirectory);
       }
     } else if (event.kind === "remove") {
       for (const path of event.paths) {
         const subdirectory = _getSubdirectory(path);
-        if (subdirectory) await handleSubdirectoryRemoval(subdirectory);
+        if (subdirectory) debouncedHandleRemoval(subdirectory);
       }
     }
   }
@@ -127,9 +159,8 @@ async function handleSubdirectoryRemoval(path: string) {
   }
 }
 
-// Main server to dispatch requests
 async function startMainServer() {
-  debug(`Main server running on port ${CONFIG.mainPort}`);
+  debug(`Proxy running on port ${CONFIG.mainPort}`);
 
   await Deno.serve({ port: CONFIG.mainPort, onListen: () => null }, async req => {
     const url = new URL(req.url);
